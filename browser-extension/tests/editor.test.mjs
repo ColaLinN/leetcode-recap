@@ -27,6 +27,14 @@ test('sync binds the unique visible editor, writes source as data, and confirms 
   assert.equal(h.calls.length, 0);
 });
 
+test('standard Monaco python language is supported when the selector explicitly confirms Python3', async () => {
+  const h = harness({ language: 'python', label: 'Python3' });
+  assert.equal((await h.run('editor-status')).python3, true);
+  assert.equal((await h.run('editor-sync')).editorSynced, true);
+  assert.equal(h.state.writes, 1);
+  assert.equal(h.calls.length, 0);
+});
+
 test('Python model alone does not establish Python3; language changes only through the bound dialog', async () => {
   const h = harness({ language: 'python', label: 'Python' });
   assert.equal((await h.run('editor-sync')).ok, false);
@@ -36,6 +44,45 @@ test('Python model alone does not establish Python3; language changes only throu
   assert.equal(h.state.languageClicks, 1);
   assert.equal((await h.run('editor-status')).python3, true);
   assert.equal((await h.run('editor-sync')).editorSynced, true);
+});
+
+test('observed LeetCode Python3 model language is confirmed and synchronizes through the real page task', async () => {
+  // Read-only live metadata: the language button is Python3 and the visible
+  // editor's containing element carries data-mode-id="python3". No live code,
+  // account data, or credentials are needed to replay this language contract.
+  const h = harness({ language: 'python3', label: 'Python3' });
+  const status = await h.run('editor-status');
+  assert.equal(status.ok, true);
+  assert.equal(status.languageSelected, true);
+  assert.equal(status.python3, true, 'the observed Python3 button/model pair must pass the worker readiness gate');
+  const code = 'class Solution:\n    pass\n';
+  const synced = await h.run('editor-sync', { code });
+  assert.equal(synced.ok, true);
+  assert.equal(synced.editorSynced, true);
+  assert.equal(h.state.value, code);
+  assert.equal(h.state.writes, 1);
+  assert.equal(h.state.cookieReads, 0);
+  assert.equal(h.calls.length, 0);
+});
+
+test('a Python3 model id still requires an explicitly selected Python3 button', async () => {
+  const h = harness({ language: 'python3', label: 'Python' });
+  assert.equal((await h.run('editor-status')).python3, false);
+  assert.equal((await h.run('editor-sync')).ok, false);
+  assert.equal(h.state.writes, 0);
+  assert.equal(h.state.cookieReads, 0);
+  assert.equal(h.calls.length, 0);
+});
+
+test('unrelated model language ids cannot pass a Python3 button or cause writes', async () => {
+  for (const language of ['plaintext', 'javascript', 'cpp']) {
+    const h = harness({ language, label: 'Python3' });
+    assert.equal((await h.run('editor-status')).python3, false, language);
+    assert.equal((await h.run('editor-sync')).ok, false, language);
+    assert.equal(h.state.writes, 0, language);
+    assert.equal(h.state.cookieReads, 0, language);
+    assert.equal(h.calls.length, 0, language);
+  }
 });
 
 test('ambiguous visible editor, readonly model, or missing public API fails without writes', async () => {

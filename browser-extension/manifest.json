@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "LeetCode Recap 本机提交联动",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "由本机 LeetCode Recap 的显式操作向力扣中国提交 Python 3 解答。",
   "minimum_chrome_version": "106",
   "permissions": ["scripting", "storage"],

@@ -45,7 +45,9 @@ export async function pageTask(input) {
       .filter(button => visible(button) && languages.test(text(button)));
     if (controls.length !== 1) return failed('无法安全确认原题的语言选择控件；未同步或提交。');
     return { ok: true, editor, model, control: controls[0], modelUri: model.uri.toString(), modelVersion: model.getVersionId(),
-      python3: isPython3(text(controls[0])) && model.getLanguageId() === 'python', languageSelected: isPython3(text(controls[0])) };
+      // LeetCode registers Python3 as "python3"; stock Monaco uses "python".
+      // Both still require the actual language selector to show Python3.
+      python3: isPython3(text(controls[0])) && ['python', 'python3'].includes(model.getLanguageId()), languageSelected: isPython3(text(controls[0])) };
   }
   function verifyEditor(context) {
     if (!context.ok) return context;

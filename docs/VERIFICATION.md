@@ -128,3 +128,11 @@ npm --prefix frontend audit --omit=dev
 前端 **61 项测试**、扩展 **31 项 mock 测试**及 TypeScript 生产构建通过。覆盖旧扩展能力拒绝、同一快照、同步失败零 POST、写后与提交前校验、登录失败保留同步确认、加载／取消竞态、同标签页聚焦和关闭／导航保护。本地正式页面已加载新版连接说明，未连接时保持禁用，无控制台错误；[连接说明预览](screenshots/chrome-sync-setup.jpg)。
 
 只读检查了力扣原题当前的可见／隐藏编辑器与 Python3 菜单结构；其公开的 Monaco 0.55.9 脚本包含 `getEditors()` 和全局 API 暴露路径，原题脚本使用 `monaco.editor`。这支持当前适配方案，但不等于运行时写入已验证。浏览器工具禁止访问扩展管理页，尚未确认用户已手动加载新版扩展，因此未覆盖真实原站代码，也未执行真实账号提交；真实编辑器写入与内部提交 API 仍待浏览器验证。
+
+### Python3 识别修复（扩展 1.1.1）
+
+用户实际提交遇到「原题未能确认 Python3 编辑器；未写入或提交」。只读检查当前“打家劫舍”原题：语言按钮为 `Python3`，唯一可见编辑器的祖先节点为 `data-mode-id="python3"`，隐藏编辑器为 `plaintext`。原站公开脚本将选定的 `python3` 直接传给 `monaco.editor.setModelLanguage`；此前适配错误地只接受标准 Monaco 的 `python`，因此一直等待并最终拒绝。
+
+以真实语言组合回放序列化的 `pageTask`：`node --test --test-name-pattern='observed LeetCode Python3|Python3 model id|unrelated model language' browser-extension/tests/editor.test.mjs` 修复前 **1 失败／2 通过**，Python3 就绪断言为 `false !== true`。仅修正语言 ID 白名单后相同回放 **3 项通过**；测试默认模型与语言菜单切换也更新为原站的 `python3`，另保留标准 `python` 的兼容回归。
+
+现在接受 `python3` 与 `python`，两者都必须同时满足真实语言按钮明确选中 Python3。隐藏／只读／歧义目标保护、写后读回和提交前校验保持有效。完整扩展 **35 项测试通过**，独立复查通过。未修改原站代码或发起真实提交；加载扩展 1.1.1 后的原站重试结果待确认。本次无需前端构建或后端／数据变更。

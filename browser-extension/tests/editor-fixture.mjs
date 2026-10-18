@@ -1,4 +1,4 @@
-export function editorFixture({ code = '# original', language = 'python', label = 'Python3', readOnly = false } = {}) {
+export function editorFixture({ code = '# original', language = 'python3', label = 'Python3', readOnly = false } = {}) {
   let menuOpen = false;
   const state = { value: code, version: 1, writes: 0, cookieReads: 0, languageClicks: 0 };
   const element = (properties = {}) => ({ isConnected: true, children: [], textContent: '',
@@ -9,7 +9,7 @@ export function editorFixture({ code = '# original', language = 'python', label 
   const control = element({ textContent: label, getAttribute: name => name === 'aria-controls' ? 'language-dialog' : null,
     click: () => { menuOpen = true; } });
   const python = element({ textContent: 'Python3', click: () => {
-    state.languageClicks++; control.textContent = 'Python3'; model.language = 'python'; state.version++; menuOpen = false;
+    state.languageClicks++; control.textContent = 'Python3'; model.language = 'python3'; state.version++; menuOpen = false;
   } });
   const dialog = element({ getBoundingClientRect: () => ({ width: menuOpen ? 300 : 0, height: 200 }),
     querySelectorAll: () => [python] });

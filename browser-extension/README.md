@@ -61,7 +61,7 @@
 ```js
 // 就绪
 { source: 'leetcode-recap-extension', version: 1, type: 'LEETCODE_PONG',
-  requestId, status: 'ready', browser: 'chrome', extensionVersion: '1.1.0', editorSync: true }
+  requestId, status: 'ready', browser: 'chrome', extensionVersion: '1.1.1', editorSync: true }
 
 // 状态
 { source: 'leetcode-recap-extension', version: 1, type: 'LEETCODE_STATUS',
