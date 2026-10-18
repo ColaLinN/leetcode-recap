@@ -1,0 +1,176 @@
+/* Vivid iOS palette: strong ink, distinct surfaces and a saturated blue anchor. */
+:root {
+  color: #25354b;
+  background: #edf2f9;
+  --blue: #2563eb;
+  --blue-dark: #1d4ed8;
+  --muted: #64748b;
+  --border: #cdd7e5;
+  --shadow: 0 2px 5px #18335708, 0 8px 20px #18335709;
+}
+.sidebar {
+  background: linear-gradient(145deg, #f8faff, #e8eef8);
+  border-right-color: #c7d3e5;
+}
+.brand-mark, .floating-check {
+  background: linear-gradient(145deg, #3b82f6, #1d4ed8);
+  border-color: #2563eb;
+  color: #fff;
+  box-shadow: 0 5px 13px #1d4ed833, inset 0 1px 1px #ffffff70;
+}
+.brand-name, .page-heading h1, .section-heading h2, .chapter-heading h1,
+.chapter-card h3, .problem-heading h1, .note-article-heading h2,
+.solution-content h2, .history-content h2, .stat-value, .empty h3 {
+  color: #142641;
+}
+.primary-nav > button, .chapter-nav > button, .note-toc button,
+.workspace-tabs > button, .result-tabs > button, .filter-tabs button,
+.icon-button, .editor-tools .icon-button, .workspace-header .back-link,
+.workspace-current, .topbar-breadcrumb, .topbar-breadcrumb strong {
+  color: #475569;
+}
+.primary-nav > button.active {
+  background: linear-gradient(130deg, #2870ee, #1d4ed8);
+  color: #fff;
+  box-shadow: 0 4px 12px #2563eb26, inset 0 1px #ffffff35;
+}
+.primary-nav > button.active b { background: #ffffff26; color: #fff; border-color: #ffffff40; }
+.primary-nav > button:hover:not(.active), .chapter-nav > button:hover,
+.note-toc button:hover, .icon-button:hover { background: #dce8fb; color: #1d4ed8; }
+.chapter-nav > button.active, .note-toc button.active {
+  background: #dbeafe;
+  color: #1746b4;
+  box-shadow: inset 3px 0 #2563eb;
+}
+.chapter-dot { color: #52647f; border-color: #bfcee3; background: #fff9; }
+.chapter-dot.done, .status-dot { background: #15803d; }
+.brand-name > span, .sidebar-label, .chapter-label > span, .user-info > span,
+.page-heading p, .eyebrow, .chapter-number, .chapter-card > p,
+.chapter-card-bottom, .stat-label, .stat-detail, .stat-value small,
+.topbar-python, .path-summary, .note-source, .chapter-source,
+.problem-footnote, .input-help, .editor-filename, .language-select,
+.editor-status, .editor-status > button, .local-test-label, .result-note,
+.case-value > span, .example-values > span, .custom-input > p,
+.input-caption, .solution-reminder, .submission-summary small,
+.reading-links > p, .reading-links summary, .reading-links summary > span,
+.empty p, .page-footer, .result-placeholder > p, .execution-heading > span {
+  color: #5a6c84;
+}
+.topbar, .workspace-header { background: #f8faff; border-bottom-color: #cdd7e5; }
+.search-box { background: #e6edf7; border-color: #cbd7e8; }
+.search-box input { color: #263d5d; }
+.search-box input::placeholder { color: #5f7089; }
+.search-box:focus-within { border-color: #2563eb; box-shadow: 0 0 0 3px #2563eb18; }
+.quiet-chip, .keycap { color: #3e5473; background: #fff; border-color: #c9d6e8; }
+.welcome-card {
+  background: linear-gradient(115deg, #142f67 0%, #174aa8 55%, #2563eb 100%);
+  border-color: #1746a2;
+  box-shadow: 0 10px 28px #174aa826, inset 0 1px #ffffff24;
+}
+.welcome-copy h2 { color: #fff; font-weight: 650; }
+.welcome-copy p, .resume-caption { color: #dceaff; }
+.welcome-copy .pill { background: #ffffff14; border-color: #ffffff40; color: #eff6ff; }
+.button.primary {
+  background: linear-gradient(#2f78f5, #1d4ed8);
+  color: #fff;
+  border-color: #1d4ed8;
+  box-shadow: 0 4px 10px #2563eb30, inset 0 1px #ffffff40;
+}
+.button.primary:hover { background: linear-gradient(#2563eb, #163fae); box-shadow: 0 5px 14px #1d4ed840; }
+.welcome-copy .button.primary {
+  background: linear-gradient(#fff, #eaf1ff);
+  color: #1746b4;
+  border-color: #d7e6ff;
+  box-shadow: 0 4px 12px #071d4938, inset 0 1px white;
+  font-weight: 650;
+}
+.welcome-copy .button.primary:hover { background: #fff; }
+.button.secondary { color: #334b6d; border-color: #b9c9df; background: linear-gradient(#fff, #edf3fc); }
+.button.secondary:hover { background: #dce8fb; border-color: #8eabd5; }
+button:disabled { opacity: .6; }
+.stat-card:disabled { opacity: 1; }
+.stat-card, .chapter-card, .panel, .workspace-panel { border-color: #ccd7e6; }
+.chapter-card:hover { border-color: #5e94ef; box-shadow: 0 6px 20px #2563eb15; }
+.chapter-card-bottom .progress-label { color: #52647e; background: #e8eef7; }
+.chapter-card-bottom .progress-label.started { color: #166534; background: #dcfce7; }
+.filter-tabs { border-bottom-color: #cbd5e1; }
+.filter-tabs button.active { color: #1746b4; background: #dbeafe; box-shadow: inset 0 1px white, 0 1px 3px #1746b418; }
+.thin-progress > i { background: #2563eb; }
+.stat-icon, .icon-tile, .mini-icon { color: #1d4ed8; background: linear-gradient(#e6efff, #cdddff); border-color: #b7cdf5; }
+.stat-icon.green, .icon-tile.green { color: #15803d; background: #dcfce7; border-color: #a9dfbd; }
+.stat-icon.purple, .icon-tile.purple { color: #7c3aed; background: #ede9fe; border-color: #d0bff4; }
+.stat-icon.orange, .icon-tile.orange { color: #b45309; background: #fef3c7; border-color: #eed08a; }
+.icon-tile.pink { color: #be185d; background: #fce7f3; border-color: #edb4d3; }
+.icon-tile.teal { color: #0f766e; background: #ccfbf1; border-color: #91d5ca; }
+.floating-note, .floating-code { border-color: #c9defc; box-shadow: 0 16px 30px #061e4a40, inset 0 1px white; }
+.floating-note strong, .floating-code code { color: #334b70; }
+.code-top > b { color: #5d6d87; }
+.mini-lines > i { background: #b2c9eb; }
+.purple-text { color: #7c3aed; }
+.blue-text { color: #1d4ed8; }
+.green-text { color: #047857; }
+.orange-text { color: #b45309; }
+.code-success { color: #166534; background: #dcfce7; border-color: #a9dfbd; }
+.art-star { color: #a9cdff; }
+.orb-one { background: #60a5fa40; }
+.orb-two { background: #818cf84d; }
+.chapter-banner, .chapter-tip { border-color: #bed1ee; background: #e4edfc; }
+.chapter-tip p, .problem-title, .problem-title > span { color: #334766; }
+.table-head { color: #52647e; background: #eaf0f9; border-color: #d1dceb; }
+.problem-row { border-color: #dfe6f0; }
+.tag { color: #38557f; background: #e7eef9; border-color: #cddbef; }
+.difficulty.easy { color: #166534; background: #dcfce7; }
+.difficulty.medium { color: #92400e; background: #fef3c7; }
+.difficulty.hard { color: #b91c1c; background: #fee2e2; }
+.accepted-label { color: #15803d !important; }
+.failed-label, .inline-error { color: #b91c1c; }
+.problem-status.accepted, .submission-icon.accepted { color: #15803d; }
+.review-button.is-marked { color: #92400e; background: #fef3c7; border-color: #e7c66f; }
+.markdown, .problem-description > .markdown, .constraints .markdown { color: #334155; }
+.markdown h1, .markdown h2, .markdown h3, .markdown h4, .markdown strong { color: #172d4b; }
+.markdown a, .reading-link-row > a { color: #1d4ed8; }
+.markdown blockquote { color: #345177; background: #eaf2ff; border-color: #3b82f6; }
+.markdown code { color: #264873; background: #e7eef9; border-color: #cedbf0; }
+.markdown pre, .example-values, .case-value > pre { background: #f0f4fa; border-color: #d2ddec; }
+.markdown pre code, .example-values > pre, .case-value > pre { color: #253b5c; }
+.markdown th { color: #263e62; background: #e4ecf8; }
+.markdown th, .markdown td { border-color: #cad7e8; }
+.note-toc, .note-article-heading, .reading-links, .reading-links > details { border-color: #cdd9e9; }
+.reading-link-row > .reading-only { color: #52647e; background: #e6edf7; }
+.reading-link-row > .local-exercise { color: #166534; background: #dcfce7; }
+.workspace-tabs, .editor-toolbar, .result-tabs { background: linear-gradient(#f8faff, #eaf0f9); border-color: #cad7e8; }
+.workspace-tabs > button.active, .result-tabs > button.active { color: #1d4ed8; font-weight: 650; }
+.workspace-tabs > button.active:after, .result-tabs > button.active:after { background: #2563eb; }
+.editor-tools .icon-button:hover { background: #dbeafe; color: #1d4ed8; }
+.python-icon { color: #a16207; }
+.editor-status, .editor-status > button { color: #52647e; }
+.editor-status { background: #f4f7fc; border-color: #d5e0ef; }
+.editor-status > button.save-failed, .judge-warning { color: #92400e; }
+.result-placeholder > strong, .toggle-label { color: #334b6b; }
+.terminal-icon { color: #2563eb; background: #e3edff; border-color: #bfd3f4; }
+.result-count.success { color: #166534; background: #dcfce7; }
+.case-tabs > button { color: #4b6080; background: #eaf0f9; border-color: #d4dfee; }
+.case-tabs > button.active { color: #1746b4; background: #dbeafe; border-color: #93b4ed; }
+.case-tabs > button.pass > span { background: #15803d; }
+.case-tabs > button.active.fail { color: #b91c1c; background: #fee2e2; border-color: #efaaaa; }
+.case-value > pre.value-error { color: #b91c1c; background: #fff1f2; border-color: #efbfc4; }
+.custom-input > textarea { color: #263e62; background: #f0f4fa; border-color: #b9cce6; }
+.custom-input > textarea:focus { border-color: #2563eb; outline-color: #2563eb; }
+.split-handle:hover, .split-handle:focus-visible { background: #c5d9fa; }
+.split-handle > i { background: #8499b8; }
+.chapter-dot.done { color: #fff; border-color: #15803d; }
+.chapter-heading p, .chapter-overview, .progress-ring > span,
+.progress-ring small, .content-tabs > button, .submission-score,
+.small-label, .loading-block, .app-loading { color: #52647e; }
+.chapter-tip strong { color: #1d4ed8; }
+.content-tabs { border-color: #cbd7e8; }
+.content-tabs > button.active { color: #1d4ed8; font-weight: 650; }
+.content-tabs > button.active:after { background: #2563eb; }
+.content-tabs > button > span { color: #38557f; background: #e1eafa; }
+.review-button { color: #405779; }
+.editor-status .status-dot { background: #15803d; }
+.result-count { color: #b91c1c; background: #fee2e2; }
+.result-count.success { color: #166534; background: #dcfce7; }
+.submission-summary strong, .submission-icon { color: #b91c1c; }
+.error-box { color: #991b1b; background: #fff1f2; border-color: #efb6bf; }
+.inline-error { border-color: #efb6bf; }
