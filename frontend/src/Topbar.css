@@ -1,0 +1,62 @@
+/* The search field receives the space left by navigation and group controls. */
+.app-shell .topbar {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(200px, 1fr) max-content;
+  align-items: center;
+  gap: 32px;
+  height: 80px;
+  padding: 0 36px;
+  background: #f8faff;
+}
+.topbar .topbar-navigation { display: flex; align-items: center; gap: 10px; min-width: 0; max-width: clamp(200px, 26vw, 420px); }
+.topbar .topbar-breadcrumb { min-width: 0; font-size: 15px; }
+.topbar-breadcrumb ol { display: flex; align-items: center; gap: 9px; margin: 0; padding: 0; list-style: none; min-width: 0; }
+.topbar-breadcrumb li { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.topbar-breadcrumb li > svg { flex-shrink: 0; color: #9aacc3; }
+.topbar-breadcrumb a { display: inline-flex; align-items: center; min-height: 40px; color: #566d8d; text-decoration: none; border-radius: 6px; }
+.topbar-breadcrumb a:hover { color: #245bd3; text-decoration: underline; text-underline-offset: 4px; }
+.topbar-breadcrumb a:focus-visible { outline: 2px solid #3268ee; outline-offset: 3px; }
+.topbar-breadcrumb .breadcrumb-root, .topbar-breadcrumb .breadcrumb-part { flex-shrink: 0; }
+.breadcrumb-root a > svg { display: none; }
+.topbar-breadcrumb .breadcrumb-current a { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 40px; color: #1e3657; font-size: 16px; font-weight: 650; }
+.topbar .search-box { width: auto; max-width: none; min-width: 0; height: 46px; margin: 0; padding: 0 14px; gap: 10px; border-radius: 11px; background: #fff; border: 1px solid #c8d5e8; box-shadow: 0 2px 5px #1c3b6905, inset 0 1px 2px #183b6b04; }
+.topbar .search-box:focus-within { border-color: #3268ee; box-shadow: 0 0 0 3px #3268ee16; }
+.topbar .search-box > svg { flex-shrink: 0; color: #7b91af; }
+.topbar .search-box input { flex: 1; min-width: 0; width: 100%; font-size: 15px; color: #203c64; }
+.topbar .search-box input::placeholder { color: #7a8da8; }
+.topbar .search-box kbd { display: inline-flex; flex-shrink: 0; align-items: center; font-size: 11px; letter-spacing: 0; padding: 3px 6px; color: #7d8ea6; border-color: #dde5f0; background: #f5f8fd; }
+.topbar-controls { display: flex; align-items: center; min-width: 0; }
+.topbar .topbar-group { margin: 0; gap: 10px; font-size: 13px; color: #657c9d; }
+.topbar .topbar-group > span { display: inline; white-space: nowrap; }
+.topbar .topbar-group select { width: clamp(170px, 15vw, 260px); min-width: 0; max-width: 260px; height: 42px; padding: 0 11px; border-radius: 9px; font-size: 14px; color: #294c7b; background: #f3f7ff; }
+@media (max-width: 1280px) {
+  .app-shell .topbar { padding: 0 28px; gap: 24px; }
+  .topbar .topbar-group select { width: 180px; }
+}
+@media (min-width: 801px) and (max-width: 1100px) {
+  .app-shell .topbar { grid-template-columns: minmax(0, max-content) minmax(180px, 1fr) max-content; padding: 0 20px; gap: 14px; }
+  .topbar .topbar-navigation { max-width: 200px; }
+  .topbar .topbar-group > span { display: none; }
+  .topbar .topbar-group select { width: 140px; font-size: 13px; }
+  .topbar .topbar-breadcrumb { font-size: 14px; }
+  .topbar-breadcrumb .breadcrumb-current a { font-size: 15px; }
+}
+@media (max-width: 800px) {
+  .app-shell .topbar { height: auto; min-height: 126px; grid-template-columns: minmax(0, 1fr) max-content; gap: 8px 16px; padding: 12px 20px 14px; }
+  .topbar .topbar-navigation { max-width: none; }
+  .topbar-controls { grid-column: 2; grid-row: 1; }
+  .topbar .topbar-group > span { display: none; }
+  .topbar .topbar-group select { width: 155px; height: 38px; font-size: 13px; }
+  .topbar .search-box { grid-column: 1 / -1; grid-row: 2; height: 46px; }
+  .topbar .search-box input { font-size: 16px; }
+  .topbar .topbar-breadcrumb { font-size: 14px; }
+  .topbar-breadcrumb .breadcrumb-current a { font-size: 15px; }
+}
+@media (max-width: 600px) {
+  .app-shell .topbar { padding-left: 16px; padding-right: 16px; gap: 8px 10px; }
+  .topbar .topbar-navigation { gap: 6px; }
+  .topbar-breadcrumb .breadcrumb-root a > span, .topbar-breadcrumb .breadcrumb-part { display: none; }
+  .breadcrumb-root a > svg { display: block; }
+  .topbar-breadcrumb ol, .topbar-breadcrumb li { gap: 6px; }
+  .topbar .topbar-group select { width: 135px; }
+}

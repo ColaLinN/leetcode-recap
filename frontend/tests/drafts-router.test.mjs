@@ -93,6 +93,25 @@ test('malformed routes stay readable and problem navigation retains chapter cont
   assert.equal(router.parseRoute().kind, 'home');
 });
 
+test('breadcrumb links preserve group context and deep link to a learning part', () => {
+  const browser = { location: { hash: '#/chapter/two-pointers?group=round-A' } };
+  const router = loadModule('../src/router.ts', { window: browser, URLSearchParams });
+  const href = router.routeHref({kind:'home',groupId:'round-A',part:'algorithms'});
+  assert.equal(href, '#/?group=round-A&part=algorithms');
+  assert.equal(browser.location.hash, '#/chapter/two-pointers?group=round-A');
+  browser.location.hash = href;
+  assert.equal(router.parseRoute().kind, 'home');
+  assert.equal(router.parseRoute().part, 'algorithms');
+  assert.equal(router.parseRoute().groupId, 'round-A');
+  router.go('home', undefined, undefined, undefined, 'data-structures');
+  assert.equal(router.parseRoute().part, 'data-structures');
+  assert.equal(router.parseRoute().groupId, 'round-A');
+  router.go('home');
+  assert.equal(router.parseRoute().part, undefined);
+  browser.location.hash = '#/?group=round-A&part=unknown';
+  assert.equal(router.parseRoute().part, undefined);
+});
+
 test('same problem in different groups has separate recovery and save queues', async () => {
   const h = draftHarness();
   h.rememberDraft('same', 'A code', 'group-A');

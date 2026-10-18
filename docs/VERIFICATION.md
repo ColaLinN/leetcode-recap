@@ -172,4 +172,13 @@ npm --prefix frontend audit --omit=dev
 - 正式服务 `8765` 已加载新构建；仅查看个人组列表和归档页验证入口，没有更改个人组的归档状态，也未向个人记录写入测试提交。
 
 预览：[左侧练习组栏](screenshots/practice-sidebar.jpg)、[归档与恢复](screenshots/practice-archive-restore.jpg)。
+
+## 顶部导航与搜索（2026-10-19）
+
+- 顶部改为导航、弹性搜索框和练习组选择三列。搜索框高度 46px，输入文字 15px，当前面包屑 16px，组选择 14px；移除顶部 Python 就绪状态。手机端搜索另占整行，输入文字 16px。
+- 面包屑使用真实链接，可返回总览、回到当前专题或进入所属“数据结构／算法”筛选页。分类筛选以 URL 的 `part` 参数保存，刷新及浏览器返回仍能恢复，跳转保留当前组。点击当前专题可退出搜索结果并回到题单。
+- 正式服务只读浏览器实测分类链接、保留组 ID、关键词“接雨水”检索及面包屑退出搜索。2048px 宽屏时搜索框为 1126px，1280px 时为 455px，1024px 为 432px，820px 为 228px；390px 时搜索框另占一行，宽 358px。各尺寸无页面横向溢出，导航、搜索和组选择不重叠，控制台无警告或错误。
+- 前端 68 项测试、TypeScript 检查与生产构建通过，新增路由回归覆盖分类链接、组上下文和无效分类参数。此次未改动个人记录或后端存储。
+
+预览：[宽屏顶部](screenshots/header-wide.jpg)、[手机顶部](screenshots/header-mobile.jpg)。
 - 正式操作入口截图：`docs/screenshots/practice-copy-controls.png`；隔离手机编辑预览：`docs/screenshots/practice-edit-mobile.png`。

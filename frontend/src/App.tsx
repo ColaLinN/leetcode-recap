@@ -16,7 +16,7 @@ import {
 import { api, groupUrl } from "./api";
 import { endPracticeOnNavigation } from "./practice";
 import type { Catalog, Health, PracticeGroup } from "./types";
-import { go, parseRoute } from "./router";
+import { go, parseRoute, routeHref } from "./router";
 import type { Route } from "./router";
 import { ErrorBox } from "./ui";
 import {
@@ -86,7 +86,7 @@ function GroupApp({ route }: { route: Route }) {
     setMenuOpen(false);
     window.scrollTo(0, 0);
     if (route.kind === "home") void load();
-  }, [route.kind, route.id]);
+  }, [route.kind, route.id, route.part]);
   useEffect(() => {
     const updateResume = () => {
       if (parseRoute().kind === "home" && parseRoute().groupId === groupId) {
@@ -127,6 +127,10 @@ function GroupApp({ route }: { route: Route }) {
   );
   const learningParts = catalog ? buildLearningParts(catalog) : [];
   const activePart = catalog ? activeLearningPart(catalog, route) : undefined;
+  const breadcrumbTitle = route.kind === "chapter" ? activeChapter?.title ?? "专题"
+    : route.kind === "review" ? "待复习"
+    : route.kind === "notes" ? "专题笔记"
+    : learningParts.find(part => part.key === route.part)?.id ?? "学习总览";
   useEffect(() => {
     setExpandedParts((expanded) => activePart ? expandActivePart(expanded, activePart.id) : { 数据结构: false, 算法: false });
   }, [activePart?.id, route.kind, route.id, route.chapterId]);
@@ -271,7 +275,7 @@ function GroupApp({ route }: { route: Route }) {
       <main className="main-shell">
         {!workspace && (
           <header className="topbar">
-            <div className="topbar-breadcrumb">
+            <div className="topbar-navigation">
               <button
                 className="mobile-menu icon-button"
                 aria-label="打开导航"
@@ -279,23 +283,22 @@ function GroupApp({ route }: { route: Route }) {
               >
                 <Menu size={21} />
               </button>
-              <span>我的工作台</span>
-              <ChevronRight size={13} />
-              {route.kind === "chapter" && activePart && (
-                <><span>{activePart.id}</span><ChevronRight size={13} /></>
-              )}
-              <strong>
-                {route.kind === "chapter"
-                  ? activeChapter?.title
-                  : route.kind === "review"
-                    ? "待复习"
-                    : route.kind === "notes"
-                      ? "专题笔记"
-                      : "学习总览"}
-              </strong>
+              <nav className="topbar-breadcrumb" aria-label="面包屑导航">
+                <ol>
+                  <li className="breadcrumb-root"><a href={routeHref({kind:"home",groupId})} onClick={() => setSearch("")} title="返回学习总览" aria-label="我的工作台"><Home size={17} aria-hidden="true" /><span>我的工作台</span></a></li>
+                  {route.kind === "chapter" && activePart && <li className="breadcrumb-part">
+                    <ChevronRight size={16} aria-hidden="true" />
+                    <a href={routeHref({kind:"home",groupId,part:activePart.key})} onClick={() => setSearch("")}>{activePart.id}</a>
+                  </li>}
+                  <li className="breadcrumb-current">
+                    <ChevronRight size={16} aria-hidden="true" />
+                    <a href={routeHref({...route,groupId})} onClick={() => setSearch("")} aria-current="page" title={breadcrumbTitle}>{breadcrumbTitle}</a>
+                  </li>
+                </ol>
+              </nav>
             </div>
             <label className="search-box">
-              <Search size={16} />
+              <Search size={19} />
               <input
                 ref={searchRef}
                 value={search}
@@ -314,18 +317,13 @@ function GroupApp({ route }: { route: Route }) {
                 </button>
               )}
             </label>
-            <label className="topbar-group">
+            <div className="topbar-controls"><label className="topbar-group">
               <span>练习组</span>
               <select aria-label="切换练习组" value={groupId} onChange={e => { void selectGroup(e.target.value).catch(e => setError(e.message)); }}>
                 {practiceGroups.map(group => <option key={group.id} value={group.id}>{group.name}{group.archivedAt ? "（已归档）" : ""}</option>)}
               </select>
             </label>
-            <span className="topbar-python">
-              <span
-                className={`status-dot ${health?.judge.available ? "" : "warning"}`}
-              />
-              {health?.judge.available ? "Python 判题已就绪" : "Python 工作台"}
-            </span>
+            </div>
           </header>
         )}
         {error ? (
@@ -364,7 +362,7 @@ function GroupApp({ route }: { route: Route }) {
         ) : route.kind === "notes" ? (
           <NotesPage key={route.id} catalog={catalog} initial={route.id} />
         ) : (
-          <Dashboard catalog={catalog} completed={completed} resume={resume} groups={practiceGroups} onManage={setPracticePanel} />
+          <Dashboard catalog={catalog} completed={completed} resume={resume} groups={practiceGroups} onManage={setPracticePanel} part={route.part} />
         )}
       </main>
       {catalog && practicePanel && <PracticePanel mode={practicePanel} catalog={catalog} groups={practiceGroups}

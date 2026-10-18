@@ -29,18 +29,20 @@ export function Dashboard({
   resume,
   groups: practiceGroups,
   onManage,
+  part,
 }: {
   catalog: Catalog;
   completed: number;
   resume: string | null;
   groups: PracticeGroup[];
   onManage: (mode: PracticePanelMode) => void;
+  part?: string;
 }) {
   const resumeProblem = catalog.problems.find((problem) => problem.id === resume);
-  const [group, setGroup] = useState("全部");
   const current = catalog.practiceGroup;
   const nextProblem = resumeProblem ?? catalog.problems.find(p => !catalog.progress[p.id]?.accepted) ?? catalog.problems[0];
   const learningParts = buildLearningParts(catalog);
+  const group = learningParts.find(item => item.key === part)?.id ?? "全部";
   const groups = ["全部", ...learningParts.map((part) => part.id)];
   return (
     <div className="page-content dashboard">
@@ -73,7 +75,7 @@ export function Dashboard({
               key={part}
               className={group === part ? "active" : ""}
               aria-pressed={group === part}
-              onClick={() => setGroup(part)}
+              onClick={() => go("home", undefined, undefined, current.id, learningParts.find(item => item.id === part)?.key)}
             >
               {part}
             </button>
