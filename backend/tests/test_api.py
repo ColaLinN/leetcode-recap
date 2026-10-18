@@ -116,6 +116,7 @@ def test_local_origin_guard_unknown_api_and_spa(fixture):
     client, _, _ = fixture
     assert client.post("/api/problems/sum/run", headers={"Origin": "https://evil.example"}, json={"code": "x"}).status_code == 403
     assert client.put("/api/problems/sum/draft", headers={"Origin": "null"}, json={"code": "x"}).status_code == 403
+    assert client.put("/api/problems/sum/draft", headers={"Origin": "http://[broken"}, json={"code": "x"}).status_code == 403
     assert client.get("/api/catalog", headers={"Host": "rebind.evil"}).status_code == 403
     assert client.put("/api/problems/sum/draft", headers={"Origin": "http://localhost:5173"}, json={"code": ""}).status_code == 200
     assert client.get("/api/unknown").status_code == 404

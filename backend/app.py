@@ -50,13 +50,19 @@ def create_app(data_dir=None, database_path=None, judge=None, frontend_dir=None)
 
     @app.middleware("http")
     async def local_only(request: Request, call_next):
-        host = urlsplit("http://" + request.headers.get("host", "")).hostname
+        try:
+            host = urlsplit("http://" + request.headers.get("host", "")).hostname
+        except ValueError:
+            return JSONResponse({"detail": "无效的本机地址。"}, status_code=403)
         if host not in LOCAL_HOSTS:
             return JSONResponse({"detail": "此服务仅支持本机访问。"}, status_code=403)
         if request.method not in ("GET", "HEAD", "OPTIONS"):
             origin = request.headers.get("origin")
             if origin:
-                parsed = urlsplit(origin)
+                try:
+                    parsed = urlsplit(origin)
+                except ValueError:
+                    return JSONResponse({"detail": "无效的请求来源。"}, status_code=403)
                 if parsed.hostname not in LOCAL_HOSTS - {"testserver"} or parsed.scheme not in ("http", "https"):
                     return JSONResponse({"detail": "拒绝来自其他网站的修改请求。"}, status_code=403)
         return await call_next(request)

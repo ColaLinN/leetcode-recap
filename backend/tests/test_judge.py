@@ -64,3 +64,23 @@ def test_real_custom_reference_computes_expected(docker):
     result = docker.execute({"method": "solve"}, "class Solution:\n def solve(self,x): return x*2", [{"args": [17]}], reference=True)
     assert result["status"] == "Accepted"
     assert result["results"][0]["actual"] == 34
+
+
+def test_real_container_memory_process_network_and_privilege_limits(docker):
+    code = """import os
+class Solution:
+ def solve(self):
+  def read_limit(*paths):
+   for path in paths:
+    if os.path.exists(path):
+     with open(path) as handle: return handle.read().strip()
+  with open('/proc/self/status') as handle: status=handle.read()
+  with open('/proc/net/dev') as handle: network=handle.read()
+  return [read_limit('/sys/fs/cgroup/memory.max','/sys/fs/cgroup/memory/memory.limit_in_bytes'),
+          read_limit('/sys/fs/cgroup/pids.max','/sys/fs/cgroup/pids/pids.max'),
+          'eth0' not in network, 'NoNewPrivs:\\t1' in status,
+          'CapEff:\\t0000000000000000' in status,
+          bool(os.statvfs('/').f_flag & os.ST_RDONLY)]
+"""
+    result = docker.execute({"method": "solve"}, code, [{"args": [], "expected": ["268435456", "32", True, True, True, True]}])
+    assert result["status"] == "Accepted", result

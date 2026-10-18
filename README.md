@@ -2,11 +2,13 @@
 
 把自己的算法笔记变成可以阅读、编写 Python、运行和复习的本地工作台。
 
+![学习总览](docs/screenshots/overview.jpg)
+
 做题页采用左右分屏：左侧题目、笔记、题解与提交记录，右侧 Python 编辑器和测试结果。界面采用浅色 iOS 风格与柔和拟物细节。
 
 ## Quickstart
 
-需要 **Python 3.9+、Node.js 20.19+ 或 22.12+、npm、Docker Desktop / OrbStack**。先启动 Docker。
+需要 **Python 3.9+、Node.js 22.12+、npm、Docker Desktop / OrbStack**。先启动 Docker。
 
 ```sh
 ./scripts/setup.sh
@@ -21,6 +23,10 @@ RECAP_PORT=8766 ./scripts/start.sh # 自定义端口（先停止旧服务）
 ```
 
 首次准备会安装依赖、构建前端和本地 Python 判题镜像，需要联网。平时题面、编辑器、笔记、判题与记录均在本机运行。程序只监听本机回环地址，无需注册。
+
+## 内容规模
+
+**26 个学习章节 · 65 道可判题题目 · 30 篇原始笔记 · 1,934 组提交测试**。每章精选 2–3 道题，跨章节重复出现的题目共享进度。保留其余原题链接，作为延伸阅读。
 
 ## 可以做什么
 
@@ -63,12 +69,18 @@ runtime/               本机草稿、进度、提交记录与日志（Git 忽�
 
 ```sh
 ./scripts/dev.sh                       # API + 前端开发服务
+.venv/bin/python scripts/check_content.py
 .venv/bin/python -m pytest backend/tests -q
+npm --prefix frontend test
 npm --prefix frontend run build
-.venv/bin/python -m backend.validate_catalog --workers 2 # 全题库真实 Docker 回归
+.venv/bin/python -m backend.validate_catalog --include-examples --workers 2 # 全题库真实 Docker 回归
 ```
 
 生产预览由 FastAPI 直接提供构建后的前端；开发环境由 Vite 转发 `/api` 和 `/content` 到本机后端。开发服务与生产服务使用同一默认后端端口，切换前先停止现有服务。
+
+运行 HTTP 与真实判题的组合验证：`.venv/bin/python scripts/smoke.py`。它使用临时数据库，不修改个人进度。
+
+导入笔记中保留的外部链接和远程图片需要联网。
 
 完整测试范围与验证结果见 [验证记录](docs/VERIFICATION.md)。接口可在本地 [API 文档](http://127.0.0.1:8765/api/docs) 查看。
 

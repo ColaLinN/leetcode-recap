@@ -14,6 +14,7 @@ from backend.judge_client import DockerJudge
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--workers", type=int, choices=(1, 2), default=2)
+    parser.add_argument("--include-examples", action="store_true", help="同时执行每道题的展示样例")
     parser.add_argument("--catalog", type=Path, default=Path(__file__).resolve().parents[1] / "data" / "catalog.json")
     options = parser.parse_args()
     judge = DockerJudge()
@@ -23,7 +24,8 @@ def main():
     problems = json.loads(options.catalog.read_text(encoding="utf-8"))["problems"]
 
     def check(problem):
-        return problem, judge.execute(problem, problem["solution"], problem["tests"])
+        tests = problem["tests"] + problem["examples"] if options.include_examples else problem["tests"]
+        return problem, judge.execute(problem, problem["solution"], tests)
 
     passed, cases, failures = 0, 0, []
     with ThreadPoolExecutor(max_workers=options.workers) as pool:

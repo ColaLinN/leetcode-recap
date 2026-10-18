@@ -43,6 +43,7 @@ def main():
             result = client.post(url + '/submit', json={'code': p['solution']}).json()
             assert result['status'] == 'Accepted' and result['passed'] == len(p['tests']), result
             client.put(url + '/review', json={'review': True}).raise_for_status()
+            client.post(url + '/visit').raise_for_status()
             draft = p['starter'] + '\n# persistence smoke check\n'
             client.put(url + '/draft', json={'code': draft}).raise_for_status()
         with TestClient(create_app(**options)) as restored:

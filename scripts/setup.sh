@@ -4,6 +4,7 @@ cd "$(dirname "$0")/.."
 for tool in python3 node npm docker; do
   command -v "$tool" >/dev/null || { echo "缺少 $tool，请先安装。"; exit 1; }
 done
+node -e 'const [major,minor]=process.versions.node.split(".").map(Number);if(major<22||(major===22&&minor<12)){console.error("需要 Node.js 22.12+。");process.exit(1)}'
 if ! docker info >/dev/null 2>&1; then
   echo '请先启动 Docker Desktop 或 OrbStack，再重新执行。'
   exit 1

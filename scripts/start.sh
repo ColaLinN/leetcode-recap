@@ -26,8 +26,16 @@ with socket.socket() as sock:
     except OSError:
         raise SystemExit('端口已被占用，请先停止现有服务或修改 RECAP_PORT。')
 CHECK_PORT
-nohup .venv/bin/python -m uvicorn backend.app:app --host 127.0.0.1 --port "$port" > runtime/server.log 2>&1 &
-server_pid=$!
+server_pid="$(.venv/bin/python - "$port" <<'START_SERVER'
+import os, subprocess, sys
+with open('runtime/server.log', 'ab', buffering=0) as log:
+    process = subprocess.Popen(
+        [sys.executable, '-m', 'uvicorn', 'backend.app:app', '--host', '127.0.0.1', '--port', sys.argv[1]],
+        stdin=subprocess.DEVNULL, stdout=log, stderr=log,
+        start_new_session=True, close_fds=True, env=os.environ.copy())
+print(process.pid)
+START_SERVER
+)"
 echo "$server_pid" > runtime/server.pid
 echo "$port" > runtime/server.port
 for attempt in {1..40}; do
