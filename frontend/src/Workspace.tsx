@@ -11,6 +11,7 @@ import {
   Clock3,
   Code2,
   FileText,
+  ExternalLink,
   History,
   ListChecks,
   LoaderCircle,
@@ -113,6 +114,7 @@ function WorkspaceReady({
   onReview: (id: string, review: boolean) => Promise<void>;
 }) {
   const id = problem.id;
+  const originalProblemPath = new URL(problem.sourceUrl).pathname;
   const [code, setCode] = useState(
     () => recoverDraft(problem.id) ?? problem.draft ?? problem.starter,
   );
@@ -383,6 +385,21 @@ function WorkspaceReady({
                       </span>
                     ))}
                   </div>
+                  <nav className="problem-source-links" aria-label="原题链接">
+                    <span>查看原题</span>
+                    {["leetcode.cn", "leetcode.com"].map((site) => (
+                      <a
+                        key={site}
+                        href={`https://${site}${originalProblemPath}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={`在新标签页打开 ${site} 的原题`}
+                      >
+                        {site}
+                        <ExternalLink size={12} aria-hidden="true" />
+                      </a>
+                    ))}
+                  </nav>
                 </div>
                 <Markdown text={problem.statement} />
                 <div className="examples">
@@ -413,16 +430,6 @@ function WorkspaceReady({
                     <ListChecks size={14} />
                     {problem.testCount} 组本地测试
                   </span>
-                  {problem.sourceUrl && (
-                    <a
-                      href={problem.sourceUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      原题链接
-                      <ChevronRight size={12} />
-                    </a>
-                  )}
                 </div>
                 {problem.kind === "design" && (
                   <div className="input-help">

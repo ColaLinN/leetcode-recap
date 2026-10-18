@@ -1805,6 +1805,22 @@ textarea {
   gap: 7px;
   flex-wrap: wrap;
 }
+.problem-source-links {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 15px;
+  font-size: 11px;
+}
+.problem-source-links > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 8px;
+  border: 1px solid;
+  border-radius: 6px;
+}
 .problem-meta > .tag {
   font-size: 8px;
   padding: 4px 7px;

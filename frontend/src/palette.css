@@ -174,3 +174,7 @@ button:disabled { opacity: .6; }
 .submission-summary strong, .submission-icon { color: #b91c1c; }
 .error-box { color: #991b1b; background: #fff1f2; border-color: #efb6bf; }
 .inline-error { border-color: #efb6bf; }
+
+.problem-source-links > span { color: #52647e; }
+.problem-source-links > a { color: #1d4ed8; background: #edf3ff; border-color: #bfd0ed; }
+.problem-source-links > a:hover { color: #1746b4; background: #dbeafe; border-color: #8eafe5; text-decoration: none; }
