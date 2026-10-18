@@ -24,7 +24,7 @@ import {
   Sparkles,
   Terminal,
 } from "lucide-react";
-import { api, jsonBody } from "./api";
+import { api, groupUrl, jsonBody } from "./api";
 import type {
   Catalog,
   ExecutionResult,
@@ -35,6 +35,7 @@ import type {
 } from "./types";
 import { go } from "./router";
 import { recoverDraft, rememberDraft, saveDraft } from "./drafts";
+import { practiceSession, fullPracticeTime } from "./practice";
 import { Difficulty, Empty, ErrorBox, formatValue, statusLabel } from "./ui";
 import Markdown from "./Markdown";
 import { NoteReader } from "./Pages";
@@ -63,7 +64,7 @@ export default function Workspace({
   const [error, setError] = useState("");
   useEffect(() => {
     let cancelled = false;
-    api<Problem>(`/api/problems/${id}`)
+    api<Problem>(groupUrl(`/api/problems/${id}`, catalog.practiceGroup.id))
       .then((data) => {
         if (!cancelled) setProblem(data);
       })
@@ -73,7 +74,7 @@ export default function Workspace({
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, catalog.practiceGroup.id]);
   if (error)
     return (
       <div className="page-content">
@@ -118,9 +119,11 @@ function WorkspaceReady({
   onReview: (id: string, review: boolean) => Promise<void>;
 }) {
   const id = problem.id;
+  const groupId = catalog.practiceGroup.id;
+  const [session] = useState(() => practiceSession(groupId, id));
   const originalProblemPath = new URL(problem.sourceUrl).pathname;
   const [code, setCode] = useState(
-    () => recoverDraft(problem.id) ?? problem.draft ?? problem.starter,
+    () => recoverDraft(problem.id, groupId) ?? problem.draft ?? problem.starter,
   );
   const [saveState, setSaveState] = useState(
     code !== (problem.draft ?? problem.starter) ? "正在保存…" : "已保存",
@@ -192,14 +195,14 @@ function WorkspaceReady({
     };
   }, [id]);
   useEffect(() => {
-    void api(`/api/problems/${id}/visit`, { method: "POST" })
+    void api(groupUrl(`/api/problems/${id}/visit`, groupId), jsonBody({ sessionId: session.id }))
       .then(() => window.dispatchEvent(new Event("recap-draft-saved")))
       .catch(() => undefined);
   }, [id]);
   const changeCode = (value: string) => {
     if (value === latestCode.current) return;
     revision.current++;
-    rememberDraft(id, value);
+    rememberDraft(id, value, groupId);
     latestCode.current = value;
     dirty.current = true;
     setCode(value);
@@ -209,7 +212,7 @@ function WorkspaceReady({
     if (!dirty.current) return;
     const version = revision.current;
     const timer = window.setTimeout(() => {
-      saveDraft(id, code)
+      saveDraft(id, code, groupId, session.id)
         .then(() => {
           if (version === revision.current) {
             dirty.current = latestCode.current !== code;
@@ -225,8 +228,8 @@ function WorkspaceReady({
   useEffect(() => {
     const flush = () => {
       if (dirty.current) {
-        rememberDraft(id, latestCode.current);
-        void saveDraft(id, latestCode.current).catch(() => undefined);
+        rememberDraft(id, latestCode.current, groupId);
+        void saveDraft(id, latestCode.current, groupId, session.id, true).catch(() => undefined);
       }
     };
     window.addEventListener("beforeunload", flush);
@@ -240,7 +243,7 @@ function WorkspaceReady({
     const value = latestCode.current;
     const version = revision.current;
     try {
-      await saveDraft(id, value);
+      await saveDraft(id, value, groupId, session.id);
       if (version === revision.current) {
         dirty.current = latestCode.current !== value;
         setSaveState(dirty.current ? "正在保存…" : "已保存");
@@ -298,8 +301,8 @@ function WorkspaceReady({
     const executedCode = latestCode.current;
     try {
       const submitLocal = (snapshot: string) => api<ExecutionResult>(
-        `/api/problems/${id}/${kind}`,
-        jsonBody({ code: snapshot, ...(args ? { customArgs: args } : {}) }),
+        groupUrl(`/api/problems/${id}/${kind}`, groupId),
+        jsonBody({ code: snapshot, sessionId: session.id, requestId: crypto.randomUUID(), ...(args ? { customArgs: args } : {}) }),
       );
       const output = await (kind === "submit"
         ? submitWithSnapshot(executedCode, submitLocal, syncToLeetCode && slug ? snapshot => {
@@ -348,6 +351,7 @@ function WorkspaceReady({
           <ArrowLeft size={16} />
           <span>{chapter?.title ?? "学习路径"}</span>
         </button>
+        <span className="workspace-group-name" title={catalog.practiceGroup.name}>{catalog.practiceGroup.name}</span>
         <ChevronRight size={13} className="muted" />
         <span className="workspace-current">
           {problem.number}. {problem.title}
@@ -518,8 +522,9 @@ function WorkspaceReady({
               <Solution id={id} />
             ) : (
               <SubmissionHistory
+                groupId={groupId}
                 id={id}
-                refreshKey={result?.submissionId}
+                refreshKey={result?.executionId ?? result?.submissionId}
                 currentCode={code}
                 onNavigateError={navigateToError}
                 onRestore={(restored) => {
@@ -818,12 +823,14 @@ function Solution({ id }: { id: string }) {
 }
 function SubmissionHistory({
   id,
+  groupId,
   refreshKey,
   onRestore,
   currentCode,
   onNavigateError,
 }: {
   id: string;
+  groupId: string;
   refreshKey?: number;
   onRestore: (code: string) => void;
   currentCode: string;
@@ -836,7 +843,7 @@ function SubmissionHistory({
   const [restored, setRestored] = useState<number | null>(null);
   useEffect(() => {
     let cancelled = false;
-    api<{ submissions: Submission[] }>(`/api/problems/${id}/submissions`)
+    api<{ submissions: Submission[] }>(groupUrl(`/api/problems/${id}/submissions?include_runs=true`, groupId))
       .then((v) => {
         if (!cancelled) {
           setItems(v.submissions);
@@ -852,12 +859,12 @@ function SubmissionHistory({
     return () => {
       cancelled = true;
     };
-  }, [id, refreshKey]);
+  }, [id, groupId, refreshKey]);
   return (
     <div className="history-content">
       <span className="eyebrow">EVERY ATTEMPT COUNTS</span>
       <h2>每一次尝试，都有记录</h2>
-      <p className="muted">代码和结果会保存在本地，随时可以重新查看。</p>
+      <p className="muted">本组每次运行与提交的代码、结果和时间均保存在本机。</p>
       {error ? (
         <ErrorBox message={error} />
       ) : loading ? (
@@ -867,8 +874,8 @@ function SubmissionHistory({
         </div>
       ) : !items.length ? (
         <Empty
-          title="从第一次提交开始"
-          description="提交代码后，这里会留下你的解题足迹。"
+          title="从第一次运行开始"
+          description="运行或提交代码后，这里会留下本组练习记录。"
         />
       ) : (
         items.map((item) => (
@@ -894,17 +901,10 @@ function SubmissionHistory({
                 <strong
                   className={item.status === "Accepted" ? "accepted-label" : ""}
                 >
-                  {statusLabel(item.status)}
+                  {item.kind === "run" ? "运行 · " : "提交 · "}{statusLabel(item.status)}
                 </strong>
                 <small>
-                  {new Date(
-                    /Z$|[+-]\d\d:\d\d$/.test(item.createdAt)
-                      ? item.createdAt
-                      : `${item.createdAt}Z`,
-                  ).toLocaleString("zh-CN", {
-                    timeZone: "Asia/Singapore",
-                    hour12: false,
-                  })}
+                  {fullPracticeTime(item.createdAt)}
                 </small>
               </span>
               <span className="submission-score">

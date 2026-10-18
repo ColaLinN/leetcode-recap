@@ -51,6 +51,35 @@ export interface Catalog {
   notes: Note[];
   problems: Problem[];
   progress: Record<string, Progress>;
+  practiceGroup: PracticeGroup;
+  allChapters: Chapter[];
+}
+export interface PracticeGroup {
+  id: string;
+  name: string;
+  createdAt: string;
+  lastPracticedAt: string | null;
+  lastProblemId: string | null;
+  archivedAt: string | null;
+  sourceGroupId: string | null;
+  chapterIds: string[] | null;
+  legacyImported: boolean;
+  total: number;
+  completed: number;
+  practiceCount: number;
+  weeklyCount: number;
+  streak: number;
+}
+export interface PracticeSession {
+  id: string;
+  problemId: string;
+  problemTitle: string;
+  startedAt: string;
+  lastActiveAt: string | null;
+  endedAt: string | null;
+  active: boolean;
+  runs: number;
+  submits: number;
 }
 export interface TestResult {
   index: number;
@@ -77,11 +106,16 @@ export interface ExecutionResult {
   results: TestResult[];
   submissionId?: number;
   detail?: string;
+  executionId?: number;
+  createdAt?: string;
+  finishedAt?: string;
 }
 export interface Submission extends ExecutionResult {
   id: number;
   createdAt: string;
   code: string;
+  kind?: "run" | "submit";
+  sessionId?: string;
 }
 export interface Health {
   ok: boolean;

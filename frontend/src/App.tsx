@@ -13,8 +13,9 @@ import {
   Settings2,
   X,
 } from "lucide-react";
-import { api } from "./api";
-import type { Catalog, Health } from "./types";
+import { api, groupUrl } from "./api";
+import { endPracticeOnNavigation } from "./practice";
+import type { Catalog, Health, PracticeGroup } from "./types";
 import { go, parseRoute } from "./router";
 import type { Route } from "./router";
 import { ErrorBox } from "./ui";
@@ -29,6 +30,16 @@ import Workspace from "./Workspace";
 import { activeLearningPart, buildLearningParts, expandActivePart } from "./learningPath";
 export default function App() {
   const [route, setRoute] = useState<Route>(parseRoute);
+  useEffect(() => {
+    const navigate = () => { endPracticeOnNavigation(); setRoute(parseRoute()); };
+    window.addEventListener("hashchange", navigate);
+    return () => window.removeEventListener("hashchange", navigate);
+  }, []);
+  return <GroupApp key={route.groupId ?? "initial"} route={route} />;
+}
+function GroupApp({ route }: { route: Route }) {
+  const groupId = route.groupId ?? "original";
+  const [practiceGroups, setPracticeGroups] = useState<PracticeGroup[]>([]);
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
   const [resume, setResume] = useState<string | null>(null);
@@ -37,35 +48,47 @@ export default function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [expandedParts, setExpandedParts] = useState<Record<string, boolean>>({ 数据结构: false, 算法: false });
   const searchRef = useRef<HTMLInputElement>(null);
+  const loadRevision = useRef(0);
   const load = useCallback(async () => {
+    const revision = ++loadRevision.current;
     setError("");
     try {
+      const groupsData = await api<{ groups: PracticeGroup[]; activeGroupId: string }>("/api/practice-groups");
+      if (revision !== loadRevision.current) return;
+      setPracticeGroups(groupsData.groups);
+      if (!route.groupId) {
+        go(route.kind, route.id, route.chapterId, groupsData.activeGroupId);
+        return;
+      }
       const [data, resumeData, healthData] = await Promise.all([
-        api<Catalog>("/api/catalog"),
-        api<{ problemId: string | null }>("/api/resume"),
+        api<Catalog>(groupUrl("/api/catalog", groupId)),
+        api<{ problemId: string | null }>(groupUrl("/api/resume", groupId)),
         api<Health>("/api/health"),
       ]);
+      if (revision !== loadRevision.current) return;
       setCatalog({ ...data, progress: data.progress ?? {} });
       setResume(resumeData.problemId);
       setHealth(healthData);
     } catch (e) {
-      setError((e as Error).message);
+      if (revision === loadRevision.current) setError((e as Error).message);
     }
-  }, []);
+  }, [groupId]);
   useEffect(() => {
     void load();
-    const onHash = () => {
-      setRoute(parseRoute());
-      setSearch("");
-      setMenuOpen(false);
-      window.scrollTo(0, 0);
-    };
-    window.addEventListener("hashchange", onHash);
-    return () => window.removeEventListener("hashchange", onHash);
   }, [load]);
   useEffect(() => {
+    setSearch("");
+    setMenuOpen(false);
+    window.scrollTo(0, 0);
+    if (route.kind === "home") void load();
+  }, [route.kind, route.id]);
+  useEffect(() => {
     const updateResume = () => {
-      void api<{ problemId: string | null }>("/api/resume")
+      if (parseRoute().kind === "home" && parseRoute().groupId === groupId) {
+        void load();
+        return;
+      }
+      void api<{ problemId: string | null }>(groupUrl("/api/resume", groupId))
         .then((v) => setResume(v.problemId))
         .catch(() => undefined);
     };
@@ -75,7 +98,7 @@ export default function App() {
       window.removeEventListener("recap-draft-saved", updateResume);
       window.removeEventListener("hashchange", updateResume);
     };
-  }, []);
+  }, [groupId]);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key === "k") {
@@ -86,14 +109,12 @@ export default function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-  const refreshProgress = useCallback(async () => {
-    const [data, resumeData] = await Promise.all([
-      api<Catalog>("/api/catalog"),
-      api<{ problemId: string | null }>("/api/resume"),
-    ]);
-    setCatalog({ ...data, progress: data.progress ?? {} });
-    setResume(resumeData.problemId);
-  }, []);
+  const refreshProgress = load;
+  const selectGroup = async (id: string, problemId?: string) => {
+    await api(`/api/practice-groups/${id}/activate`, { method: "POST" });
+    go(problemId ? "problem" : "home", problemId, undefined, id);
+    if (id === groupId) await load();
+  };
   const workspace = route.kind === "problem";
   const activeChapter = catalog?.chapters.find(
     (chapter) => chapter.id === route.id,
@@ -104,7 +125,7 @@ export default function App() {
     setExpandedParts((expanded) => activePart ? expandActivePart(expanded, activePart.id) : { 数据结构: false, 算法: false });
   }, [activePart?.id, route.kind, route.id, route.chapterId]);
   const updateReview = async (id: string, review: boolean) => {
-    await api(`/api/problems/${id}/review`, {
+    await api(groupUrl(`/api/problems/${id}/review`, groupId), {
       method: "PUT",
       body: JSON.stringify({ review }),
     });
@@ -284,6 +305,12 @@ export default function App() {
                 </button>
               )}
             </label>
+            <label className="topbar-group">
+              <span>练习组</span>
+              <select aria-label="切换练习组" value={groupId} onChange={e => { void selectGroup(e.target.value).catch(e => setError(e.message)); }}>
+                {practiceGroups.map(group => <option key={group.id} value={group.id}>{group.name}{group.archivedAt ? "（已归档）" : ""}</option>)}
+              </select>
+            </label>
             <span className="topbar-python">
               <span
                 className={`status-dot ${health?.judge.available ? "" : "warning"}`}
@@ -306,7 +333,7 @@ export default function App() {
           </div>
         ) : workspace ? (
           <Workspace
-            key={route.id}
+            key={`${groupId}:${route.id}`}
             id={route.id ?? ""}
             catalog={catalog}
             health={health}
@@ -327,7 +354,7 @@ export default function App() {
         ) : route.kind === "notes" ? (
           <NotesPage key={route.id} catalog={catalog} initial={route.id} />
         ) : (
-          <Dashboard catalog={catalog} completed={completed} resume={resume} />
+          <Dashboard catalog={catalog} completed={completed} resume={resume} groups={practiceGroups} onSelectGroup={selectGroup} onRefresh={load} />
         )}
       </main>
     </div>

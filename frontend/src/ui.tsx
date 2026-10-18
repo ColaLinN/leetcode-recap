@@ -25,6 +25,8 @@ export const statusLabel = (status: string) =>
     "Memory Limit Exceeded": "内存超限",
     "Output Limit Exceeded": "输出超限",
     "Judge Unavailable": "判题服务未就绪",
+    "Invalid Input": "输入不符合约束",
+    Running: "执行中",
   })[status] ?? status;
 export function IconTile({
   index,

@@ -19,7 +19,7 @@ function draftHarness() {
   const events = [];
   const drafts = loadModule('../src/drafts.ts', {
     require: () => ({ api: (url, options) => new Promise((resolve, reject) => {
-      requests.push({ url, code: JSON.parse(options.body).code, resolve, reject });
+      requests.push({ url, code: JSON.parse(options.body).code, keepalive: options.keepalive, resolve, reject });
     }) }),
     localStorage: {
       getItem: key => storage.get(key) ?? null,
@@ -30,6 +30,7 @@ function draftHarness() {
     Event: class { constructor(type) { this.type = type; } },
     Map,
     Promise,
+    TextEncoder,
   });
   return { ...drafts, requests, events };
 }
@@ -90,4 +91,62 @@ test('malformed routes stay readable and problem navigation retains chapter cont
   assert.equal(browser.location.hash, '#/problem/two%20sum?chapter=arrays');
   router.go('home');
   assert.equal(router.parseRoute().kind, 'home');
+});
+
+test('same problem in different groups has separate recovery and save queues', async () => {
+  const h = draftHarness();
+  h.rememberDraft('same', 'A code', 'group-A');
+  h.rememberDraft('same', 'B code', 'group-B');
+  const a = h.saveDraft('same', 'A code', 'group-A', 'visit-A');
+  const b = h.saveDraft('same', 'B code', 'group-B', 'visit-B');
+  await tick();
+  assert.equal(h.requests.length, 2);
+  assert.equal(h.requests[0].url, '/api/problems/same/draft?group_id=group-A');
+  assert.equal(h.requests[1].url, '/api/problems/same/draft?group_id=group-B');
+  h.requests[0].resolve({});
+  await a;
+  assert.equal(h.recoverDraft('same', 'group-A'), null);
+  assert.equal(h.recoverDraft('same', 'group-B'), 'B code');
+  h.requests[1].reject(new Error('offline'));
+  await assert.rejects(b, /offline/);
+  assert.equal(h.recoverDraft('same', 'group-B'), 'B code');
+});
+
+test('all navigation preserves the chosen practice group and allows explicit switching', () => {
+  const browser = { location: { hash: '#/problem/two-sum?chapter=arrays&group=round-A' } };
+  const router = loadModule('../src/router.ts', { window: browser, URLSearchParams });
+  router.go('chapter', 'strings');
+  assert.equal(router.parseRoute().groupId, 'round-A');
+  router.go('home');
+  assert.equal(browser.location.hash, '#/?group=round-A');
+  router.go('problem', 'two-sum', 'arrays', 'round-B');
+  assert.equal(router.parseRoute().groupId, 'round-B');
+  assert.equal(router.parseRoute().chapterId, 'arrays');
+});
+
+test('legacy recovery is migrated only to the original group', () => {
+  const storage = new Map([['recap:recovery:sum', 'old unsaved code']]);
+  const h = loadModule('../src/drafts.ts', {
+    require: () => ({ api: async () => ({}) }),
+    localStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) },
+    Map, Promise,
+  });
+  assert.equal(h.recoverDraft('sum', 'new-round'), null);
+  assert.equal(h.recoverDraft('sum', 'original'), 'old unsaved code');
+  assert.equal(storage.get('recap:recovery:original:sum'), 'old unsaved code');
+  assert.equal(storage.has('recap:recovery:sum'), false);
+});
+
+test('navigation flush respects the browser keepalive byte budget without dropping large drafts', async () => {
+  const h = draftHarness();
+  const small = h.saveDraft('small', 'code', 'a', 'visit', true);
+  const large = h.saveDraft('large', '你'.repeat(25000), 'a', 'visit', true);
+  const regular = h.saveDraft('regular', 'x'.repeat(100000), 'a', 'visit');
+  await tick();
+  assert.equal(h.requests[0].keepalive, true);
+  assert.equal(h.requests[1].keepalive, false);
+  assert.equal(h.requests[2].keepalive, false);
+  assert.equal(h.requests[1].code.length, 25000);
+  h.requests.forEach(request => request.resolve({}));
+  await Promise.all([small, large, regular]);
 });

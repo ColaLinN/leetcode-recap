@@ -22,3 +22,5 @@ export const jsonBody = (value: unknown) => ({
   method: "POST",
   body: JSON.stringify(value),
 });
+export const groupUrl = (url: string, groupId: string) =>
+  `${url}${url.includes("?") ? "&" : "?"}group_id=${encodeURIComponent(groupId)}`;

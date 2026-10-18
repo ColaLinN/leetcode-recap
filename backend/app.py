@@ -6,12 +6,12 @@ from pathlib import Path
 from typing import Any, List, Optional
 from urllib.parse import urlsplit
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from backend.database import Store
+from backend.database import Store, DEFAULT_GROUP
 from backend.editor import router as editor_router
 from backend.judge_client import DockerJudge
 
@@ -22,6 +22,8 @@ LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1", "testserver"}
 
 class CodeRequest(BaseModel):
     code: str = Field(min_length=1, max_length=100000)
+    sessionId: Optional[str] = Field(default=None, pattern=r"^[a-zA-Z0-9_-]{1,80}$")
+    requestId: Optional[str] = Field(default=None, pattern=r"^[a-zA-Z0-9_-]{1,80}$")
 
 
 class RunRequest(CodeRequest):
@@ -34,6 +36,22 @@ class ReviewRequest(BaseModel):
 
 class DraftRequest(BaseModel):
     code: str = Field(max_length=100000)
+    sessionId: Optional[str] = Field(default=None, pattern=r"^[a-zA-Z0-9_-]{1,80}$")
+
+
+class VisitRequest(BaseModel):
+    sessionId: str = Field(pattern=r"^[a-zA-Z0-9_-]{1,80}$")
+
+
+class GroupRequest(BaseModel):
+    name: str = Field(default="", max_length=80)
+    chapterIds: Optional[List[str]] = Field(default=None, max_length=100)
+    restartFrom: Optional[str] = None
+
+
+class GroupUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=80)
+    archived: Optional[bool] = None
 
 
 def safe_problem(problem):
@@ -81,22 +99,102 @@ def create_app(data_dir=None, database_path=None, judge=None, frontend_dir=None)
             raise HTTPException(404, "题目不存在")
         return problem
 
+    if (data_dir / "catalog.json").is_file():
+        store.configure_catalog([str(p["id"]) for p in catalog()["problems"]])
+
+    def practice_group(group_id):
+        group = store.group(group_id)
+        if group is None:
+            raise HTTPException(404, "练习组不存在")
+        return group
+
+    def scoped_problem(problem_id, group_id):
+        practice_group(group_id)
+        problem = problem_by_id(problem_id)
+        if problem_id not in store.problem_ids(group_id):
+            raise HTTPException(404, "此题不在当前练习组中，请切换练习组")
+        return problem
+
+    @app.exception_handler(ValueError)
+    async def invalid_practice(request: Request, error: ValueError):
+        return JSONResponse({"detail": str(error)}, status_code=409)
+
+    @app.get("/api/practice-groups")
+    def get_groups():
+        return {"groups": store.groups(), "activeGroupId": store.active_group_id(), "timeZone": "Asia/Singapore"}
+
+    @app.post("/api/practice-groups")
+    def create_group(body: GroupRequest):
+        content = catalog()
+        if body.restartFrom:
+            source = practice_group(body.restartFrom)
+            ids = store.problem_ids(body.restartFrom)
+            chapter_ids = source["chapterIds"]
+        elif body.chapterIds is None:
+            ids = [str(p["id"]) for p in content["problems"]]
+            chapter_ids = None
+        else:
+            chapters = {c["id"]: c for c in content["chapters"]}
+            if not body.chapterIds or any(c not in chapters for c in body.chapterIds):
+                raise HTTPException(422, "请选择有效章节")
+            ids = list(dict.fromkeys(p for c in body.chapterIds for p in chapters[c]["problemIds"]))
+            chapter_ids = list(dict.fromkeys(body.chapterIds))
+        if not ids:
+            raise HTTPException(422, "练习组至少需要一道题")
+        name = body.name.strip() or f"第 {len(store.groups()) + 1} 轮复习"
+        return store.create_group(name, ids, body.restartFrom, chapter_ids)
+
+    @app.patch("/api/practice-groups/{group_id}")
+    def update_group(group_id: str, body: GroupUpdate):
+        practice_group(group_id)
+        if body.name is not None and not body.name.strip():
+            raise HTTPException(422, "练习组名称不能为空")
+        return store.update_group(group_id, body.name.strip() if body.name else None, body.archived)
+
+    @app.post("/api/practice-groups/{group_id}/activate")
+    def activate_group(group_id: str):
+        practice_group(group_id)
+        store.activate(group_id)
+        return {"ok": True}
+
+    @app.get("/api/practice-groups/{group_id}/sessions")
+    def practice_sessions(group_id: str, offset: int = Query(default=0, ge=0)):
+        practice_group(group_id)
+        result = store.sessions(group_id, offset)
+        titles = {str(p["id"]): p["title"] for p in catalog()["problems"]}
+        for session in result["sessions"]:
+            session["problemTitle"] = titles.get(session["problemId"], session["problemId"])
+        return result
+
+    @app.post("/api/practice-groups/{group_id}/sessions/{session_id}/end")
+    def end_session(group_id: str, session_id: str):
+        practice_group(group_id)
+        store.end_session(group_id, session_id)
+        return {"ok": True}
+
     @app.get("/api/health")
     def health():
         return {"ok": True, "judge": judge.availability()}
 
     @app.get("/api/catalog")
-    def get_catalog():
+    def get_catalog(group_id: str = DEFAULT_GROUP):
         content = catalog()
-        return dict(content, problems=[safe_problem(problem) for problem in content["problems"]], progress=store.progress())
+        group = practice_group(group_id)
+        ids = set(store.problem_ids(group_id))
+        chapters = [dict(c, problemIds=[p for p in c["problemIds"] if p in ids]) for c in content["chapters"]
+                    if group["chapterIds"] is None or c["id"] in group["chapterIds"]]
+        return dict(content, chapters=[c for c in chapters if c["problemIds"]], allChapters=content["chapters"],
+                    problems=[safe_problem(p) for p in content["problems"] if str(p["id"]) in ids],
+                    progress={p: v for p, v in store.progress(group_id).items() if p in ids}, practiceGroup=group)
 
     @app.get("/api/resume")
-    def resume():
-        return {"problemId": store.resume()}
+    def resume(group_id: str = DEFAULT_GROUP):
+        practice_group(group_id)
+        return {"problemId": store.resume(group_id)}
 
     @app.get("/api/problems/{problem_id}")
-    def get_problem(problem_id: str):
-        return dict(safe_problem(problem_by_id(problem_id)), **store.state(problem_id))
+    def get_problem(problem_id: str, group_id: str = DEFAULT_GROUP):
+        return dict(safe_problem(scoped_problem(problem_id, group_id)), **store.state(problem_id, group_id))
 
     @app.get("/api/problems/{problem_id}/solution")
     def get_solution(problem_id: str):
@@ -104,51 +202,61 @@ def create_app(data_dir=None, database_path=None, judge=None, frontend_dir=None)
         return {"solution": problem["solution"], "explanation": problem.get("explanation", "")}
 
     @app.post("/api/problems/{problem_id}/visit")
-    def visit_problem(problem_id: str):
-        problem_by_id(problem_id)
-        store.visit(problem_id)
+    def visit_problem(problem_id: str, body: Optional[VisitRequest] = None, group_id: str = DEFAULT_GROUP):
+        scoped_problem(problem_id, group_id)
+        store.visit(problem_id, group_id, body.sessionId if body else None)
         return {"ok": True}
 
     @app.put("/api/problems/{problem_id}/draft")
-    def save_draft(problem_id: str, body: DraftRequest):
-        problem_by_id(problem_id)
-        store.save_draft(problem_id, body.code)
+    def save_draft(problem_id: str, body: DraftRequest, group_id: str = DEFAULT_GROUP):
+        scoped_problem(problem_id, group_id)
+        store.save_draft(problem_id, body.code, group_id, body.sessionId)
         return {"ok": True}
 
     @app.put("/api/problems/{problem_id}/review")
-    def set_review(problem_id: str, body: ReviewRequest):
-        problem_by_id(problem_id)
-        store.set_review(problem_id, body.review)
+    def set_review(problem_id: str, body: ReviewRequest, group_id: str = DEFAULT_GROUP):
+        scoped_problem(problem_id, group_id)
+        store.set_review(problem_id, body.review, group_id)
         return {"ok": True, "review": body.review}
 
     @app.post("/api/problems/{problem_id}/run")
-    def run(problem_id: str, body: RunRequest):
-        problem = problem_by_id(problem_id)
-        tests = problem["examples"]
-        if body.customArgs is not None:
-            if len(json.dumps(body.customArgs)) > 65536:
-                raise HTTPException(422, "自定义输入不得超过 64 KiB")
-            tests = [{"args": body.customArgs}]
-            reference = judge.execute(problem, problem["solution"], tests, reference=True)
-            if reference["status"] != "Accepted":
-                if reference["status"] == "Judge Unavailable":
-                    return reference
-                raise HTTPException(422, "参考解无法处理这组输入，请检查参数数量、类型及题目约束。")
-            tests[0]["expected"] = reference["results"][0]["actual"]
-        return judge.execute(problem, body.code, tests)
+    def run(problem_id: str, body: RunRequest, group_id: str = DEFAULT_GROUP):
+        problem = scoped_problem(problem_id, group_id)
+        return execute(problem_id, body, problem, problem["examples"], "run", group_id)
 
-    @app.post("/api/problems/{problem_id}/submit")
-    def submit(problem_id: str, body: CodeRequest):
-        problem = problem_by_id(problem_id)
-        result = judge.execute(problem, body.code, problem["tests"])
-        if result["status"] != "Judge Unavailable":
-            result["submissionId"] = store.save_submission(problem_id, body.code, result)
+    def execute(problem_id, body, problem, tests, kind, group_id):
+        custom_args = body.customArgs if isinstance(body, RunRequest) else None
+        if custom_args is not None and len(json.dumps(custom_args)) > 65536:
+            raise HTTPException(422, "自定义输入不得超过 64 KiB")
+        execution_id, created = store.begin_execution(problem_id, body.code, kind, group_id, body.sessionId, body.requestId, custom_args)
+        if created:
+            if custom_args is not None:
+                tests = [{"args": custom_args}]
+                reference = judge.execute(problem, problem["solution"], tests, reference=True)
+                if reference["status"] != "Accepted":
+                    if reference["status"] == "Judge Unavailable":
+                        store.finish_execution(execution_id, reference)
+                        return store.execution(execution_id)
+                    store.finish_execution(execution_id, dict(reference, status="Invalid Input"))
+                    raise HTTPException(422, "参考解无法处理这组输入，请检查参数数量、类型及题目约束。")
+                tests[0]["expected"] = reference["results"][0]["actual"]
+            result = judge.execute(problem, body.code, tests)
+            store.finish_execution(execution_id, result)
+        result = store.execution(execution_id)
+        result["executionId"] = execution_id
+        if kind == "submit" and result["status"] not in ("Judge Unavailable", "Running"):
+            result["submissionId"] = execution_id
         return result
 
+    @app.post("/api/problems/{problem_id}/submit")
+    def submit(problem_id: str, body: CodeRequest, group_id: str = DEFAULT_GROUP):
+        problem = scoped_problem(problem_id, group_id)
+        return execute(problem_id, body, problem, problem["tests"], "submit", group_id)
+
     @app.get("/api/problems/{problem_id}/submissions")
-    def get_submissions(problem_id: str):
-        problem_by_id(problem_id)
-        return {"submissions": store.submissions(problem_id)}
+    def get_submissions(problem_id: str, group_id: str = DEFAULT_GROUP, include_runs: bool = False):
+        scoped_problem(problem_id, group_id)
+        return {"submissions": store.submissions(problem_id, group_id, include_runs)}
 
     (data_dir / "content").mkdir(parents=True, exist_ok=True)
     app.mount("/content", StaticFiles(directory=str(data_dir / "content")), name="content")
