@@ -8,23 +8,27 @@ const sender = { id: 'extension-id', frameId: 0, documentId: 'local-document', o
 const submit = (id = 'submit-0001') => ({ source: P.APP, version: 1, type: 'LEETCODE_SUBMIT', requestId: id,
   payload: { slug: 'two-sum', code: 'class Solution: pass', language: 'python3' } });
 
-function harness(action = async input => input.action === 'prepare' ? { ok: true, questionId: '1' }
+const editorAction = input => input.action === 'editor-status' ? { ok: true, python3: true, languageSelected: true, modelUri: 'current-model', modelVersion: 1 }
+  : input.action === 'editor-sync' ? { ok: true, editorSynced: true, modelUri: 'current-model', modelVersion: 2 } : { ok: true };
+function harness(action = async input => input.action.startsWith('editor-') ? editorAction(input) : input.action === 'prepare' ? { ok: true, questionId: '1' }
   : input.action === 'submit' ? { ok: true, submissionId: '456' } : { ok: true, status: 'accepted', statusDisplay: '通过' }) {
   let clock = 0;
-  const storage = {}, injections = [], messages = [], created = [];
-  const api = { runtime: { id: 'extension-id', getManifest: () => ({ version: '1.0.0' }) },
+  const storage = {}, injections = [], messages = [], created = [], focused = [];
+  const api = { runtime: { id: 'extension-id', getManifest: () => ({ version: '1.1.0' }) },
     storage: { session: { get: async key => ({ [key]: storage[key] }), set: async value => Object.assign(storage, value) } },
     tabs: { query: async () => [{ id: 20, url: 'https://leetcode.cn/problems/two-sum/description/' }],
       create: async options => { created.push(options); return { id: 20, ...options }; },
-      get: async () => ({ id: 20, status: 'complete', url: 'https://leetcode.cn/problems/two-sum/description/' }),
+      get: async () => ({ id: 20, windowId: 30, status: 'complete', url: 'https://leetcode.cn/problems/two-sum/description/' }),
+      update: async (id, options) => { focused.push({ tab: id, ...options }); },
       sendMessage: async (id, message, options) => { messages.push({ id, message, options }); } },
+    windows: { update: async (id, options) => { focused.push({ window: id, ...options }); } },
     scripting: { executeScript: async options => {
       injections.push(options);
       return [{ frameId: 0, documentId: 'official-document', result: await action(options.args[0]) }];
     } },
   };
   const options = { sleep: async ms => { clock += ms; }, now: () => clock, pollMs: 3000 };
-  return { api, options, bridge: createBackground(api, options), storage, injections, messages, created };
+  return { api, options, bridge: createBackground(api, options), storage, injections, messages, created, focused };
 }
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
@@ -39,9 +43,10 @@ test('background independently validates extension sender, top frame, document, 
   const pong = await h.bridge.handle({ source: P.APP, version: 1, type: 'LEETCODE_PING', requestId: 'ping-00001' }, sender);
   assert.equal(pong.status, 'ready');
   assert.equal(pong.browser, 'chrome');
+  assert.equal(pong.editorSync, true);
 });
 
-test('explicit submit reuses a tab without editing it and sends only once across duplicate/restarted workers', async () => {
+test('explicit submit reuses a tab without navigating or activating it and sends only once across duplicate/restarted workers', async () => {
   const h = harness();
   const ack = await h.bridge.handle(submit(), sender);
   assert.equal(ack.status, 'submitting');
@@ -52,7 +57,7 @@ test('explicit submit reuses a tab without editing it and sends only once across
   assert.equal(h.messages.at(-1).message.submissionId, '456');
   assert.deepEqual(h.messages.at(-1).options, { documentId: 'local-document' });
   assert.equal(h.injections.every(call => call.world === 'MAIN'), true);
-  assert.deepEqual(h.injections[1].target, { tabId: 20, documentIds: ['official-document'] });
+  assert.deepEqual(h.injections.find(call => call.args[0].action === 'submit').target, { tabId: 20, documentIds: ['official-document'] });
   assert.equal((await h.bridge.handle(submit(), sender)).status, 'accepted');
   const restarted = createBackground(h.api, h.options);
   assert.equal((await restarted.handle(submit(), sender)).status, 'accepted');
@@ -84,6 +89,7 @@ test('new tab waits for its exact pending problem navigation before injecting', 
 test('unknown submit outcome or a closed target never retries the submission POST', async () => {
   for (const failure of ['unknown', 'closed']) {
     const h = harness(async input => {
+      if (input.action.startsWith('editor-')) return editorAction(input);
       if (input.action === 'prepare') return { ok: true, questionId: '1' };
       if (failure === 'closed') throw new Error('target closed');
       return { ok: false, error: '提交状态未确认；未自动重试。' };
@@ -99,7 +105,7 @@ test('unknown submit outcome or a closed target never retries the submission POS
 });
 
 test('short polling timeout retains known submission id/link and does not claim a verdict', async () => {
-  const h = harness(async input => input.action === 'prepare' ? { ok: true, questionId: 1 }
+  const h = harness(async input => input.action.startsWith('editor-') ? editorAction(input) : input.action === 'prepare' ? { ok: true, questionId: 1 }
     : input.action === 'submit' ? { ok: true, submissionId: 456 } : { ok: true, status: 'pending' });
   await h.bridge.handle(submit(), sender);
   await h.bridge.whenIdle();
@@ -113,7 +119,7 @@ test('short polling timeout retains known submission id/link and does not claim 
 
 test('cancellation during POST stops waiting without claiming the server submission was undone', async () => {
   let finishSubmit;
-  const h = harness(async input => input.action === 'prepare' ? { ok: true, questionId: 1 }
+  const h = harness(async input => input.action.startsWith('editor-') ? editorAction(input) : input.action === 'prepare' ? { ok: true, questionId: 1 }
     : new Promise(resolve => { finishSubmit = resolve; }));
   await h.bridge.handle(submit(), sender);
   while (!finishSubmit) await tick();
@@ -124,6 +130,99 @@ test('cancellation during POST stops waiting without claiming the server submiss
   await h.bridge.whenIdle();
   assert.equal(h.messages.at(-1).message.status, 'canceled');
   assert.equal(h.injections.some(call => call.args[0].action === 'check'), false);
+});
+
+test('sync failure blocks both metadata requests and submission; one immutable code snapshot reaches both actions', async () => {
+  const failed = harness(async input => input.action === 'editor-sync' ? { ok: false, error: '写后读回不一致' } : editorAction(input));
+  await failed.bridge.handle(submit(), sender);
+  await failed.bridge.whenIdle();
+  assert.equal(failed.messages.at(-1).message.status, 'failed');
+  assert.equal(failed.messages.at(-1).message.editorSynced, undefined);
+  assert.equal(failed.injections.some(call => ['prepare', 'submit'].includes(call.args[0].action)), false);
+  const success = harness();
+  await success.bridge.handle(submit(), sender);
+  await success.bridge.whenIdle();
+  const sync = success.injections.find(call => call.args[0].action === 'editor-sync').args[0];
+  const posted = success.injections.find(call => call.args[0].action === 'submit').args[0];
+  assert.equal(sync.code, posted.code);
+  assert.equal(success.messages.at(-1).message.editorSynced, true);
+  assert.equal(success.messages.at(-1).message.editorUrl, 'https://leetcode.cn/problems/two-sum/description/');
+});
+
+test('editor confirmation survives login failure and session recovery opens only that same document', async () => {
+  const h = harness(async input => input.action.startsWith('editor-') ? editorAction(input) : { ok: false, error: '请先登录' });
+  await h.bridge.handle(submit(), sender);
+  await h.bridge.whenIdle();
+  assert.equal(h.messages.at(-1).message.editorSynced, true);
+  assert.equal(h.injections.some(call => call.args[0].action === 'submit'), false);
+  const restarted = createBackground(h.api, h.options);
+  const open = { source: P.APP, version: 1, type: 'LEETCODE_OPEN_EDITOR', requestId: 'submit-0001', openId: 'open-00001' };
+  const result = await restarted.handle(open, sender);
+  assert.equal(result.opened, true);
+  assert.equal(result.openId, open.openId);
+  assert.deepEqual(h.focused, [{ tab: 20, active: true }, { window: 30, focused: true }]);
+  assert.equal(h.created.length, 0);
+  h.api.tabs.get = async () => ({ id: 20, url: 'https://leetcode.cn/problems/another-problem/' });
+  assert.equal((await restarted.handle({ ...open, openId: 'open-00002' }, sender)).opened, false);
+  assert.equal(h.created.length, 0);
+  assert.equal(JSON.stringify(h.storage).includes('class Solution'), false);
+});
+
+test('lazy editor readiness is retried within a bound, while cancellation during language wait never dispatches sync', async () => {
+  let checks = 0;
+  const lazy = harness(async input => input.action === 'editor-status' && ++checks < 3
+    ? { ok: false, retryable: true, error: 'loading' } : input.action.startsWith('editor-') ? editorAction(input)
+      : input.action === 'prepare' ? { ok: false, error: 'login' } : { ok: true });
+  await lazy.bridge.handle(submit(), sender);
+  await lazy.bridge.whenIdle();
+  assert.equal(checks, 3);
+  assert.equal(lazy.messages.at(-1).message.editorSynced, true);
+  const waiting = harness(async input => input.action === 'editor-status'
+    ? { ok: true, python3: false, languageSelected: true, modelUri: 'current-model', modelVersion: 1 } : editorAction(input));
+  let resume;
+  waiting.options.sleep = () => new Promise(resolve => { resume = resolve; });
+  waiting.bridge = createBackground(waiting.api, waiting.options);
+  await waiting.bridge.handle(submit(), sender);
+  while (!resume) await tick();
+  await waiting.bridge.handle({ source: P.APP, version: 1, type: 'LEETCODE_CANCEL', requestId: 'submit-0001' }, sender);
+  resume();
+  await waiting.bridge.whenIdle();
+  assert.equal(waiting.injections.some(call => call.args[0].action === 'editor-sync'), false);
+});
+
+test('language switch tolerates a temporarily detached model before the Python3 model is ready', async () => {
+  let statuses = 0;
+  const h = harness(async input => {
+    if (input.action === 'editor-status') {
+      statuses++;
+      if (statuses === 1) return { ok: true, python3: false, languageSelected: false, modelUri: 'cpp-model', modelVersion: 1 };
+      if (statuses === 2) return { ok: false, retryable: true, error: 'model detached while switching' };
+      return editorAction(input);
+    }
+    if (input.action.startsWith('editor-')) return editorAction(input);
+    if (input.action === 'prepare') return { ok: true, questionId: 1 };
+    if (input.action === 'submit') return { ok: true, submissionId: 456 };
+    return { ok: true, status: 'accepted' };
+  });
+  await h.bridge.handle(submit(), sender);
+  await h.bridge.whenIdle();
+  assert.equal(statuses, 3);
+  assert.equal(h.messages.at(-1).message.status, 'accepted');
+  assert.equal(h.injections.filter(call => call.args[0].action === 'editor-sync').length, 1);
+  assert.equal(h.injections.filter(call => call.args[0].action === 'submit').length, 1);
+});
+
+test('open editor refuses a changed document or closed tab and never creates a replacement', async () => {
+  const h = harness();
+  await h.bridge.handle(submit(), sender);
+  await h.bridge.whenIdle();
+  const open = { source: P.APP, version: 1, type: 'LEETCODE_OPEN_EDITOR', requestId: 'submit-0001', openId: 'open-00001' };
+  h.api.scripting.executeScript = async () => [{ frameId: 0, documentId: 'new-document', result: editorAction({ action: 'editor-status' }) }];
+  assert.equal((await h.bridge.handle(open, sender)).opened, false);
+  h.api.tabs.get = async () => { throw new Error('tab closed'); };
+  assert.equal((await h.bridge.handle({ ...open, openId: 'open-00002' }, sender)).opened, false);
+  assert.equal(h.created.length, 0);
+  assert.equal(h.focused.length, 0);
 });
 
 test('cancel during initial storage read releases the tab for a new explicit request', async () => {

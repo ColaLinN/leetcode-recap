@@ -660,7 +660,7 @@ function WorkspaceReady({
               )}
             </div>
             <div className="result-scroll">
-              <LeetCodeSyncResult submission={leetCodeState.submission} onCancel={() => leetCodeBridge.current?.cancelWaiting()} />
+              <LeetCodeSyncResult submission={leetCodeState.submission} onCancel={() => leetCodeBridge.current?.cancelWaiting()} onOpenEditor={() => leetCodeBridge.current?.openEditor()} />
               {runError && <div className="inline-error">{runError}</div>}
               {resultTab === "input" ? (
                 <div className="custom-input">
@@ -764,7 +764,7 @@ function WorkspaceReady({
           </footer>
         </section>
       </div>
-      {showConnectPanel && <LeetCodeConnectPanel connection={leetCodeState.connection} onProbe={() => leetCodeBridge.current?.probe()} onClose={closeConnectPanel} />}
+      {showConnectPanel && <LeetCodeConnectPanel connection={leetCodeState.connection} connectionError={leetCodeState.connectionError} onProbe={() => leetCodeBridge.current?.probe()} onClose={closeConnectPanel} />}
     </div>
   );
 }

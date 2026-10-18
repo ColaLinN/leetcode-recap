@@ -14,12 +14,16 @@ export function createBackground(chromeApi, { sleep = wait, now = Date.now, poll
   }
   const keyFor = (sender, requestId) => `request:${sender.tab.id}:${requestId}`;
   const snapshot = (operation, status, extra = {}) => protocol.publicStatus(operation.requestId, operation.slug, status,
-    { submissionId: operation.submissionId, ...extra });
+    { submissionId: operation.submissionId, editorSynced: operation.editorSynced, ...extra });
+  const storedSnapshot = (operation, message) => ({ ...message, _slug: operation.slug,
+    _sourceDocumentId: operation.sender.documentId,
+    ...(operation.targetId !== undefined ? { _targetTabId: operation.targetId } : {}),
+    ...(operation.documentId ? { _targetDocumentId: operation.documentId } : {}) });
   async function publish(operation, status, extra = {}) {
     if (operation.canceled && status !== 'canceled') return;
     const message = snapshot(operation, status, extra);
     operation.latest = message;
-    try { await chromeApi.storage.session.set({ [operation.key]: message }); } catch { /* no resubmission on storage errors */ }
+    try { await chromeApi.storage.session.set({ [operation.key]: storedSnapshot(operation, message) }); } catch { /* no resubmission on storage errors */ }
     try { await chromeApi.tabs.sendMessage(operation.sender.tab.id, message, { documentId: operation.sender.documentId }); } catch { /* page closed or navigated */ }
   }
   async function inject(operation, action, payload = {}) {
@@ -57,6 +61,52 @@ export function createBackground(chromeApi, { sleep = wait, now = Date.now, poll
     try {
       await findTab(operation);
       if (operation.canceled) return;
+      let editorState = await inject(operation, 'editor-status');
+      for (let checks = 0; !editorState?.ok && editorState?.retryable && checks < 20 && !operation.canceled; checks++) {
+        await sleep(250);
+        if (operation.canceled) return;
+        editorState = await inject(operation, 'editor-status');
+      }
+      if (operation.canceled) return;
+      if (!editorState?.ok) { await publish(operation, 'failed', { error: editorState?.error || '原题编辑器未就绪；未同步或提交。' }); return; }
+      if (!editorState.languageSelected) {
+        const opened = await inject(operation, 'editor-open-language');
+        if (operation.canceled) return;
+        if (!opened?.ok) { await publish(operation, 'failed', { error: opened?.error || '无法打开原题语言菜单；未提交。' }); return; }
+        await sleep(150);
+        if (operation.canceled) return;
+        let chosen = await inject(operation, 'editor-choose-python3');
+        for (let checks = 0; !chosen?.ok && chosen?.retryable && checks < 20 && !operation.canceled; checks++) {
+          await sleep(100);
+          if (operation.canceled) return;
+          chosen = await inject(operation, 'editor-choose-python3');
+        }
+        if (operation.canceled) return;
+        if (!chosen?.ok) { await publish(operation, 'failed', { error: chosen?.error || '无法切换 Python3；未提交。' }); return; }
+      }
+      for (let checks = 0; !editorState.python3 && checks < 20 && !operation.canceled; checks++) {
+        await sleep(250);
+        if (operation.canceled) return;
+        editorState = await inject(operation, 'editor-status');
+        if (!editorState?.ok && !editorState?.retryable) break;
+      }
+      if (operation.canceled) return;
+      if (!editorState?.ok || !editorState.python3) {
+        await publish(operation, 'failed', { error: editorState?.error || '原题未能确认 Python3 编辑器；未写入或提交。' }); return;
+      }
+      operation.syncStarted = true;
+      const synced = await inject(operation, 'editor-sync', { code, editorModelUri: editorState.modelUri, editorModelVersion: editorState.modelVersion });
+      if (synced?.ok && synced.editorSynced === true && typeof synced.modelUri === 'string') {
+        operation.editorSynced = true;
+        operation.editorModelUri = synced.modelUri;
+      }
+      if (operation.canceled) {
+        if (operation.editorSynced) await publish(operation, 'canceled', { error: '已停止等待；代码已同步原题编辑器，尚未开始发送提交。' });
+        return;
+      }
+      if (!operation.editorSynced) { await publish(operation, 'failed', { error: synced?.error || '原题代码写入后无法确认一致；未提交。' }); return; }
+      await publish(operation, 'submitting');
+      if (operation.canceled) return;
       const prepared = await inject(operation, 'prepare');
       if (operation.canceled) return;
       if (!prepared?.ok || !protocol.submissionId(prepared.questionId)) {
@@ -64,12 +114,12 @@ export function createBackground(chromeApi, { sleep = wait, now = Date.now, poll
       }
       // Persist the attempt before dispatch. A worker restart or repeated page
       // message can never cause this requestId to send a second submission.
-      await chromeApi.storage.session.set({ [operation.key]: snapshot(operation, 'submitting', {
+      await chromeApi.storage.session.set({ [operation.key]: storedSnapshot(operation, snapshot(operation, 'submitting', {
         error: '已开始发送；结果未确认时请检查原站记录，勿重复提交。',
-      }) });
+      })) });
       if (operation.canceled) return;
       operation.sent = true;
-      const submitted = await inject(operation, 'submit', { code, questionId: prepared.questionId });
+      const submitted = await inject(operation, 'submit', { code, questionId: prepared.questionId, editorModelUri: operation.editorModelUri });
       if (submitted?.ok && protocol.submissionId(submitted.submissionId)) operation.submissionId = protocol.submissionId(submitted.submissionId);
       if (operation.canceled) return;
       if (!operation.submissionId) {
@@ -97,17 +147,40 @@ export function createBackground(chromeApi, { sleep = wait, now = Date.now, poll
       if (active.get(operation.sender.tab.id) === operation) active.delete(operation.sender.tab.id);
     }
   }
+  async function openEditor(message, sender) {
+    const reply = (opened, error) => ({ source: protocol.EXTENSION, version: 1, type: 'LEETCODE_EDITOR_OPENED',
+      requestId: message.requestId, openId: message.openId, opened, ...(error ? { error } : {}) });
+    try {
+      const record = (await chromeApi.storage.session.get(keyFor(sender, message.requestId)))[keyFor(sender, message.requestId)];
+      if (!record?.editorSynced || record._sourceDocumentId !== sender.documentId || !protocol.validSlug(record._slug)
+          || !Number.isInteger(record._targetTabId) || typeof record._targetDocumentId !== 'string') {
+        return reply(false, '没有可确认的已同步编辑器记录，请检查原题。');
+      }
+      const tab = await chromeApi.tabs.get(record._targetTabId);
+      const prefix = protocol.problemUrl(record._slug);
+      if (!tab.url?.startsWith(prefix) || tab.pendingUrl) return reply(false, '已同步的原题标签已切换或正在导航，未打开其他标签。');
+      const operation = { targetId: record._targetTabId, documentId: record._targetDocumentId, slug: record._slug };
+      const state = await inject(operation, 'editor-status');
+      if (!state?.ok || !state.python3) return reply(false, '已同步编辑器的页面或语言发生变化，请检查原题。');
+      await chromeApi.tabs.update(record._targetTabId, { active: true });
+      if (Number.isInteger(tab.windowId)) await chromeApi.windows.update(tab.windowId, { focused: true });
+      return reply(true);
+    } catch { return reply(false, '已同步的编辑器标签已关闭、导航或无法访问；未新建其他标签。'); }
+  }
   async function handle(message, sender) {
     if (!validSender(sender) || !protocol.validRequest(message)) return undefined;
     if (message.type === 'LEETCODE_PING') return { source: protocol.EXTENSION, version: 1, type: 'LEETCODE_PONG',
-      requestId: message.requestId, status: 'ready', browser: 'chrome', extensionVersion: chromeApi.runtime.getManifest().version };
+      requestId: message.requestId, status: 'ready', browser: 'chrome', editorSync: true, extensionVersion: chromeApi.runtime.getManifest().version };
+    if (message.type === 'LEETCODE_OPEN_EDITOR') return openEditor(message, sender);
     const current = active.get(sender.tab.id);
     if (message.type === 'LEETCODE_CANCEL') {
       if (!current || current.requestId !== message.requestId || current.sender.documentId !== sender.documentId) return undefined;
       current.canceled = true;
       await publish(current, 'canceled', { error: current.sent
         ? '已停止等待；提交可能已被接收或仍在判题，请到原站核对记录。'
-        : '已停止等待，尚未开始发送提交。' });
+        : current.editorSynced ? '已停止等待；代码已同步原题编辑器，尚未开始发送提交。'
+        : current.syncStarted ? '已停止等待；已发起的编辑器写入仍可能完成，请检查原题。尚未开始发送提交。'
+        : '已停止等待，尚未开始同步或发送提交。' });
       return current.latest;
     }
     const { slug, code } = message.payload;
@@ -125,7 +198,7 @@ export function createBackground(chromeApi, { sleep = wait, now = Date.now, poll
           : snapshot(operation, 'failed', { submissionId: stored.submissionId,
             error: '此请求已处理，提交状态未确认；请核对原站记录。未自动重试。' });
       }
-      await chromeApi.storage.session.set({ [operation.key]: operation.latest });
+      await chromeApi.storage.session.set({ [operation.key]: storedSnapshot(operation, operation.latest) });
     } catch {
       active.delete(sender.tab.id);
       return snapshot(operation, 'failed', { error: '无法保存请求去重标记，未启动联动；请检查扩展状态。' });

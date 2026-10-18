@@ -17,8 +17,10 @@
   }
   function validRequest(message) {
     if (!isRecord(message) || message.source !== APP || message.version !== VERSION || !validId(message.requestId)) return false;
-    if (!Object.keys(message).every(key => ['source', 'version', 'type', 'requestId', 'payload'].includes(key))) return false;
-    if (message.type === 'LEETCODE_PING' || message.type === 'LEETCODE_CANCEL') return message.payload === undefined;
+    if (!Object.keys(message).every(key => ['source', 'version', 'type', 'requestId', 'payload', 'openId'].includes(key))) return false;
+    if (message.type === 'LEETCODE_OPEN_EDITOR') return message.payload === undefined && validId(message.openId);
+    if (message.openId !== undefined) return false;
+    if (['LEETCODE_PING', 'LEETCODE_CANCEL'].includes(message.type)) return message.payload === undefined;
     const payload = message.payload;
     return message.type === 'LEETCODE_SUBMIT' && isRecord(payload) && validSlug(payload.slug)
       && payload.language === 'python3' && typeof payload.code === 'string'
@@ -38,14 +40,20 @@
     if (id) Object.assign(result, { submissionId: id, url: resultUrl(id) });
     if (typeof extra.error === 'string') result.error = extra.error.slice(0, 500);
     if (typeof extra.statusDisplay === 'string') result.statusDisplay = extra.statusDisplay.slice(0, 80);
+    if (extra.editorSynced === true) Object.assign(result, { editorSynced: true, editorUrl: `${problemUrl(slug)}description/` });
     return result;
   }
   function validResponse(message) {
     if (!isRecord(message) || message.source !== EXTENSION || message.version !== VERSION || !validId(message.requestId)) return false;
-    if (message.type === 'LEETCODE_PONG') return message.status === 'ready' && message.browser === 'chrome';
+    if (message.type === 'LEETCODE_PONG') return message.status === 'ready' && message.browser === 'chrome' && message.editorSync === true;
+    if (message.type === 'LEETCODE_EDITOR_OPENED') return validId(message.openId) && typeof message.opened === 'boolean'
+      && (message.error === undefined || (typeof message.error === 'string' && message.error.length <= 1000));
     if (message.type !== 'LEETCODE_STATUS' || !statuses.has(message.status)) return false;
     if (message.submissionId !== undefined && !submissionId(message.submissionId)) return false;
     if (message.error !== undefined && (typeof message.error !== 'string' || message.error.length > 1000)) return false;
+    if (message.editorSynced !== undefined && typeof message.editorSynced !== 'boolean') return false;
+    if (message.editorUrl !== undefined && (message.editorSynced !== true
+        || !/^https:\/\/leetcode\.cn\/problems\/[a-z0-9]+(?:-[a-z0-9]+)*\/description\/$/.test(message.editorUrl))) return false;
     if (message.url !== undefined && !/^https:\/\/leetcode\.cn\/(?:problems\/[a-z0-9]+(?:-[a-z0-9]+)*\/|submissions\/detail\/[1-9][0-9]{0,29}\/)$/u.test(message.url)) return false;
     return true;
   }
@@ -54,7 +62,7 @@
     if (!validResponse(message)) return null;
     const result = {};
     for (const key of ['source', 'version', 'type', 'requestId', 'status', 'browser', 'extensionVersion',
-      'submissionId', 'url', 'error', 'statusDisplay']) {
+      'submissionId', 'url', 'error', 'statusDisplay', 'editorSync', 'editorSynced', 'editorUrl', 'opened', 'openId']) {
       if (message[key] !== undefined) result[key] = message[key];
     }
     return result;

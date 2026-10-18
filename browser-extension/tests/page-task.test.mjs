@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { pageTask } from '../page-task.js';
+import { editorFixture } from './editor-fixture.mjs';
 
 function harness(responses, overrides = {}) {
   const calls = [];
@@ -52,9 +53,10 @@ test('login, changed schema, challenge HTML, rate limit, and missing CSRF fail c
 
 test('submission sends source strictly as JSON data once and never retries unknown outcomes', async () => {
   for (const response of [{ data: { submission_id: 456 } }, { data: {} }, new Error('secret network detail')]) {
-    const h = harness([response]);
     const code = 'class Solution:\n def twoSum(self): return "not executed"';
-    const result = await h.run({ action: 'submit', questionId: '1', code });
+    const fixture = editorFixture({ code });
+    const h = harness([response], fixture.context);
+    const result = await h.run({ action: 'submit', questionId: '1', code, editorModelUri: fixture.model.uri.toString() });
     assert.equal(h.calls.length, 1);
     assert.equal(h.calls[0].url, '/problems/two-sum/submit/');
     assert.deepEqual(JSON.parse(h.calls[0].options.body), { lang: 'python3', question_id: '1', typed_code: code });

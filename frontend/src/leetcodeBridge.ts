@@ -7,9 +7,14 @@ export type LeetCodeSubmission = {
   url?: string;
   error?: string;
   statusDisplay?: string;
+  editorSynced?: boolean;
+  editorUrl?: string;
+  editorOpenState?: "opening" | "opened" | "failed";
+  editorOpenError?: string;
 };
 export type LeetCodeBridgeState = {
   connection: "checking" | "ready" | "unavailable";
+  connectionError?: string;
   submission: LeetCodeSubmission | null;
 };
 export type LeetCodeSubmitPayload = { slug: string; code: string; language: "python3" };
@@ -23,6 +28,7 @@ type BridgeOptions = {
   requestId?: () => string;
   probeTimeoutMs?: number;
   submitTimeoutMs?: number;
+  openEditorTimeoutMs?: number;
 };
 export const emptyLeetCodeBridgeState: LeetCodeBridgeState = { connection: "checking", submission: null };
 const terminalStatuses = new Set<LeetCodeRemoteStatus>(["accepted", "rejected", "failed", "canceled"]);
@@ -50,6 +56,16 @@ function safeResultUrl(value: unknown, slug: string, submissionId?: string): str
   return submissionId ? `https://leetcode.cn/submissions/detail/${submissionId}/` : undefined;
 }
 
+function confirmedEditorUrl(value: unknown, slug: string): string | undefined {
+  if (typeof value !== "string") return undefined;
+  try {
+    const url = new URL(value);
+    if (url.origin === "https://leetcode.cn" && !url.username && !url.password &&
+        url.pathname === `/problems/${slug}/description/`) return `https://leetcode.cn/problems/${slug}/description/`;
+  } catch { /* An editor acknowledgement must refer to this problem on LeetCode.cn. */ }
+  return undefined;
+}
+
 export function createLeetCodeBridge(host: BridgeHost, onChange: (state: LeetCodeBridgeState) => void, options: BridgeOptions = {}) {
   const requestId = options.requestId ?? (() => crypto.randomUUID());
   let state: LeetCodeBridgeState = { ...emptyLeetCodeBridgeState };
@@ -59,13 +75,19 @@ export function createLeetCodeBridge(host: BridgeHost, onChange: (state: LeetCod
   let probeTimer: ReturnType<typeof setTimeout> | undefined;
   let probeRetryTimer: ReturnType<typeof setTimeout> | undefined;
   let submitTimer: ReturnType<typeof setTimeout> | undefined;
+  let editorOpenTimer: ReturnType<typeof setTimeout> | undefined;
+  let editorOpenRequest: { requestId: string; openId: string } | null = null;
   function update(next: LeetCodeBridgeState) {
     if (disposed) return;
     state = next;
     onChange(state);
   }
-  function send(type: string, id: string, payload?: LeetCodeSubmitPayload) {
-    host.postMessage({ source: "leetcode-recap-app", version: 1, type, requestId: id, ...(payload ? { payload } : {}) }, host.location.origin);
+  function send(type: string, id: string, payload?: LeetCodeSubmitPayload, openId?: string) {
+    host.postMessage({ source: "leetcode-recap-app", version: 1, type, requestId: id, ...(payload ? { payload } : {}), ...(openId ? { openId } : {}) }, host.location.origin);
+  }
+  function clearEditorOpen() {
+    clearTimeout(editorOpenTimer);
+    editorOpenRequest = null;
   }
   function clearProbe() {
     probeGeneration++;
@@ -108,10 +130,22 @@ export function createLeetCodeBridge(host: BridgeHost, onChange: (state: LeetCod
     if (message.source !== "leetcode-recap-extension" || message.version !== 1 || typeof message.requestId !== "string") return;
     if (message.type === "LEETCODE_PONG" && message.requestId === probeId && message.status === "ready" && message.browser === "chrome") {
       clearProbe();
-      update({ ...state, connection: "ready" });
+      update(message.editorSync === true
+        ? { ...state, connection: "ready", connectionError: undefined }
+        : { ...state, connection: "unavailable", connectionError: "请在 Chrome 扩展页重新加载项目扩展，再刷新练习页，以启用编辑器同步。" });
       return;
     }
     const current = state.submission;
+    if (message.type === "LEETCODE_EDITOR_OPENED") {
+      if (!current || current.editorSynced !== true || !editorOpenRequest ||
+          message.requestId !== current.requestId || message.requestId !== editorOpenRequest.requestId ||
+          message.openId !== editorOpenRequest.openId || typeof message.opened !== "boolean" ||
+          (message.error !== undefined && typeof message.error !== "string")) return;
+      clearEditorOpen();
+      update({ ...state, submission: { ...current, editorOpenState: message.opened ? "opened" : "failed",
+        editorOpenError: message.opened ? undefined : typeof message.error === "string" ? message.error.slice(0, 1000) : "无法打开已同步的原题标签页，请在 Chrome 检查该页面。" } });
+      return;
+    }
     if (message.type !== "LEETCODE_STATUS" || !current || message.requestId !== current.requestId || !isLeetCodePending(current)) return;
     if (typeof message.status !== "string" || !validStatuses.has(message.status as LeetCodeRemoteStatus)) return;
     const status = message.status as LeetCodeRemoteStatus;
@@ -123,8 +157,11 @@ export function createLeetCodeBridge(host: BridgeHost, onChange: (state: LeetCod
     const url = safeResultUrl(message.url, current.slug, submissionId) ?? current.url;
     const error = typeof message.error === "string" ? message.error.slice(0, 1000) : undefined;
     const statusDisplay = typeof message.statusDisplay === "string" ? message.statusDisplay.slice(0, 100) : undefined;
+    const acknowledgedEditor = message.editorSynced === true ? confirmedEditorUrl(message.editorUrl, current.slug) : undefined;
+    const editorSynced = current.editorSynced === true || acknowledgedEditor !== undefined;
+    const editorUrl = current.editorUrl ?? acknowledgedEditor;
     if (terminalStatuses.has(status)) clearTimeout(submitTimer);
-    update({ ...state, submission: { ...current, status, statusDisplay, ...(submissionId ? { submissionId } : {}), ...(url ? { url } : {}), ...(error ? { error } : {}) } });
+    update({ ...state, submission: { ...current, status, statusDisplay, editorSynced, ...(editorUrl ? { editorUrl } : {}), ...(submissionId ? { submissionId } : {}), ...(url ? { url } : {}), ...(error ? { error } : {}) } });
   }
   host.addEventListener("message", receive);
   return {
@@ -132,11 +169,12 @@ export function createLeetCodeBridge(host: BridgeHost, onChange: (state: LeetCod
     probe() {
       if (disposed) return;
       clearProbe();
-      update({ ...state, connection: "checking" });
+      update({ ...state, connection: "checking", connectionError: undefined });
       probeAttempt(probeGeneration, 0);
     },
     submit(payload: LeetCodeSubmitPayload): boolean {
       if (disposed || isLeetCodePending(state.submission)) return false;
+      clearEditorOpen();
       const valid = /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(payload.slug) && payload.language === "python3" && typeof payload.code === "string" && payload.code.length > 0 && payload.code.length <= 100_000;
       const id = requestId();
       if (state.connection !== "ready" || !valid) {
@@ -159,12 +197,34 @@ export function createLeetCodeBridge(host: BridgeHost, onChange: (state: LeetCod
         return false;
       }
     },
+    openEditor(): boolean {
+      const current = state.submission;
+      if (disposed || !current || current.editorSynced !== true || current.editorOpenState === "opening") return false;
+      const openId = requestId();
+      editorOpenRequest = { requestId: current.requestId, openId };
+      update({ ...state, submission: { ...current, editorOpenState: "opening", editorOpenError: undefined } });
+      editorOpenTimer = setTimeout(() => {
+        const latest = state.submission;
+        if (!latest || latest.requestId !== current.requestId || editorOpenRequest?.openId !== openId) return;
+        clearEditorOpen();
+        update({ ...state, submission: { ...latest, editorOpenState: "failed", editorOpenError: "未收到打开编辑器的确认，请在 Chrome 检查原标签页。" } });
+      }, options.openEditorTimeoutMs ?? 8000);
+      try {
+        send("LEETCODE_OPEN_EDITOR", current.requestId, undefined, openId);
+        return true;
+      } catch {
+        clearEditorOpen();
+        update({ ...state, submission: { ...current, editorOpenState: "failed", editorOpenError: "无法连接原题标签页，请在 Chrome 检查已同步的编辑器。" } });
+        return false;
+      }
+    },
     cancelWaiting,
     dispose() {
       if (disposed) return;
       cancelWaiting();
       disposed = true;
       clearProbe();
+      clearEditorOpen();
       clearTimeout(submitTimer);
       host.removeEventListener("message", receive);
     },

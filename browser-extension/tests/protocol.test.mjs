@@ -44,6 +44,10 @@ test('public responses discard credentials and only derive official safe links',
   assert.equal(protocol.publicResponse({ ...response, url: 'https://leetcode.cn.evil.example/' }), null);
   assert.equal(protocol.submissionId(-1), null);
   assert.equal(protocol.submissionId('123/else'), null);
+  const synced = protocol.publicStatus(request.requestId, 'two-sum', 'failed', { editorSynced: true });
+  assert.equal(protocol.publicResponse(synced).editorSynced, true);
+  assert.equal(protocol.publicResponse(synced).editorUrl, 'https://leetcode.cn/problems/two-sum/description/');
+  assert.equal(protocol.publicResponse({ ...synced, editorUrl: 'https://evil.example/' }), null);
 });
 
 function contentHarness(url = 'http://localhost:8765/') {
@@ -54,7 +58,7 @@ function contentHarness(url = 'http://localhost:8765/') {
   const context = { window, location: new URL(url), URL, Set, chrome: { runtime: { id: 'extension-id',
     onMessage: { addListener: callback => { listeners.runtime = callback; } },
     sendMessage: async message => { sent.push(message); return { source: protocol.EXTENSION, version: 1,
-      type: 'LEETCODE_PONG', requestId: message.requestId, status: 'ready', browser: 'chrome', extensionVersion: '1.0.0' }; },
+      type: 'LEETCODE_PONG', requestId: message.requestId, status: 'ready', browser: 'chrome', editorSync: true, extensionVersion: '1.1.0' }; },
   } } };
   vm.createContext(context);
   for (const file of ['protocol.js', 'content.js']) vm.runInContext(fs.readFileSync(new URL(`../${file}`, import.meta.url), 'utf8'), context);
@@ -73,8 +77,20 @@ test('content bridge checks window identity/origin, deduplicates, and only repor
   assert.equal(h.sent.length, 1);
   assert.equal(h.posted[0].message.status, 'ready');
   assert.equal(h.posted[0].origin, 'http://localhost:8765');
+  assert.equal(h.posted[0].message.editorSync, true);
   const bad = contentHarness('http://localhost:9999/');
   assert.equal(bad.listeners.message, undefined);
+});
+
+test('open requests use their own correlation id and never accept a caller-provided target', () => {
+  const open = { source: protocol.APP, version: 1, type: 'LEETCODE_OPEN_EDITOR', requestId: request.requestId, openId: 'open-00001' };
+  assert.equal(protocol.validRequest(open), true);
+  assert.equal(protocol.validRequest({ ...open, openId: undefined }), false);
+  assert.equal(protocol.validRequest({ ...open, payload: { tabId: 999 } }), false);
+  const response = { source: protocol.EXTENSION, version: 1, type: 'LEETCODE_EDITOR_OPENED',
+    requestId: request.requestId, openId: 'open-00001', opened: false, error: '标签已关闭' };
+  assert.equal(protocol.publicResponse(response).openId, 'open-00001');
+  assert.equal(protocol.publicResponse({ ...response, openId: undefined }), null);
 });
 
 test('manifest grants only the required site and APIs without cookies or external connectivity', () => {
