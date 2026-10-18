@@ -19,9 +19,19 @@
 
 导入后重启服务。已有题目通过 `sourceNoteIds` 关联笔记；新增笔记可能需要在章节的 `noteIds` 中手动关联。不要把草稿与提交历史写入题库文件。
 
+## 中文笔记
+
+原文保存在 `data/content/`，中文维护稿保存在 `data/translations/notes/`；`data/translations/notes.json` 记录中文标题、相关题目标题和对应源文件的 SHA-256。导入时自动生成 `data/content/zh/`，无需手改生成文件。中文只翻译正文、标题和链接标签，代码围栏与链接目标保持原样。
+
+笔记索引中的 `path`、`originalTitle`、`originalProblemLinks` 指向原文；`chinesePath`、`title`、`problemLinks` 用于默认中文显示。前端可随时切换原文。源文件发生变化后，导入器把 `translationStale` 标记为真，页面会提示查看最新原文；复核并更新中文维护稿后，再更新索引中的源文件摘要并重新导入。
+
+修改后运行 `scripts/test_import_notes.py` 和 `scripts/check_content.py`，检查代码、链接、素材以及重复导入后译文是否保留。当前 30 篇均提供中文版本，348 个相关题目链接标签已翻译；65 道本地练习的题面和讲解均为中文。
+
 ## 题目模型
 
-`data/catalog.json` 包含 `chapters`、`problems`、`notes`。章节引用共享题目 ID，避免同一题重复保存进度。每题需要：
+`data/catalog.json` 包含 `chapters`、`problems`、`notes`。`chapters` 是两个大章节下面的具体专题，`group` 只取“数据结构”或“算法”；`order` 是全局专题顺序。首页与侧栏共用这一归类，分区题量按题目 ID 去重。专题引用共享题目 ID，避免同一题重复保存进度。
+
+位运算使用原有 `bits-trie` ID，字典树单独使用 `trie` ID。重组目录只改专题归属与顺序，不迁移数据库中的题目草稿和记录。每题需要：
 
 | 字段 | 用途 |
 | --- | --- |

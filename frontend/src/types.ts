@@ -14,7 +14,11 @@ export interface Note {
   title: string;
   path: string;
   sourcePath: string;
+  chinesePath?: string;
+  originalTitle?: string;
+  translationStale?: boolean;
   problemLinks?: { title: string; url: string }[];
+  originalProblemLinks?: { title: string; url: string }[];
 }
 export interface Problem {
   id: string;
@@ -56,7 +60,14 @@ export interface TestResult {
   actual: unknown;
   stdout?: string;
   error?: string;
+  errorLocation?: ErrorLocation;
   elapsedMs: number;
+}
+export interface ErrorLocation {
+  line: number;
+  column?: number;
+  endLine?: number;
+  endColumn?: number;
 }
 export interface ExecutionResult {
   status: string;

@@ -4,7 +4,7 @@
 
 ![学习总览](docs/screenshots/overview.jpg)
 
-做题页采用左右分屏：左侧题目、笔记、题解与提交记录，右侧 Python 编辑器和测试结果。界面采用 iOS 风格与拟物细节，以深蓝主视觉、亮蓝交互和深色正文建立清晰层次。
+以“数据结构”和“算法”两个大章节组织专题。做题页采用左右分屏：左侧题目、笔记、题解与提交记录，右侧 Python 编辑器和测试结果。界面采用 iOS 风格与拟物细节，以深蓝主视觉、亮蓝交互和深色正文建立清晰层次。
 
 ## Quickstart
 
@@ -26,15 +26,17 @@ RECAP_PORT=8766 ./scripts/start.sh # 自定义端口（先停止旧服务）
 
 ## 内容规模
 
-**26 个学习章节 · 65 道可判题题目 · 30 篇原始笔记 · 1,934 组提交测试**。每章精选 2–3 道题，跨章节重复出现的题目共享进度。保留其余原题链接，作为延伸阅读。
+**2 个大章节 · 27 个专题 · 65 道可判题题目 · 30 篇中文笔记 · 1,934 组提交测试**。数据结构包含 13 个专题，算法包含 14 个专题；每个专题精选 1–3 道题，跨专题重复出现的题目共享进度。保留其余原题链接，作为延伸阅读。
 
 ## 可以做什么
 
-- 按知识点学习章节，查看原始博客笔记、图解和延伸阅读。
+- 按数据结构／算法两大章节学习专题，查看中文笔记、图解和延伸阅读；30 篇笔记支持中文／原文切换，348 个相关题目链接标题已汉化。
 - 在题目标题下方打开 `leetcode.cn` 中文原题或 `leetcode.com` 国际站原题，使用新标签页保留当前练习。
-- 在 Monaco 编辑器中使用 LeetCode 风格的 `class Solution` 编写 Python；节点结构由系统提供。
+- 在 Monaco 编辑器中使用 LeetCode 风格的 `class Solution` 编写 Python；支持变量、成员方法和函数参数提示，节点结构由系统提供。
 - “运行”检查样例或自定义参数，“提交”检查项目维护的完整测试集。
 - 查看通过数量、实际与预期输出、调试输出、错误信息和耗时。
+- 输入与输出使用紧凑 JSON；长结果默认折叠，可展开查看或复制完整内容。
+- 语法与运行错误显示代码行号，可点击跳转到编辑器；修改代码后清除旧错误标记。
 - 自动保存草稿；跨章节共享同题代码与通过状态。
 - 查看提交历史并恢复代码、标记待复习、继续上次练习。
 - 支持数组、链表、二叉树，以及 LRU、Trie 等设计类题目。
@@ -44,6 +46,10 @@ RECAP_PORT=8766 ./scripts/start.sh # 自定义端口（先停止旧服务）
 ## 做题与输入
 
 只需实现编辑器中的方法，不必解析标准输入或打印最终答案。常用 `typing` 类型、`ListNode` 和 `TreeNode` 由运行环境提供。具体方法与参数顺序以每题模板为准。
+
+输入时会自动显示补全列表，也可用 `Ctrl+Space` 手动触发，用 `Tab` 接受建议。补全由本机后端静态分析当前代码，不会执行代码；后端不可用时会降级为当前文档中的名称提示。它提供编写辅助，不进行完整的类型检查。
+
+运行或提交出现语法、运行时异常时，错误详情提供行号入口，点击即可定位到编辑器的红色标记；能可靠确定时同时显示列号。行号对应本次执行的原始代码，编辑后会清除旧标记。历史提交需先恢复同一份代码才能定位；答案错误和超时等无法确定位置的结果不会猜测行号。
 
 自定义输入是 **JSON 参数数组**，不是 Python 语法。例如：
 
@@ -55,14 +61,22 @@ RECAP_PORT=8766 ./scripts/start.sh # 自定义端口（先停止旧服务）
 
 “运行”自定义输入时，系统使用参考实现计算预期值；输入需符合题目约束。提交时的“通过”表示通过本项目测试集，不代表 LeetCode 官方判题结果。耗时包含当前实现的执行测量开销，适合定位问题，不作性能排名。
 
+## 可选：同步提交到 LeetCode.cn
+
+做题页可勾选“同步到 LeetCode.cn”，把同一次提交的 Python 代码同时发到当前 Chrome 中已登录的力扣中国账号。本地和原站的判题结果分别显示，原站失败不影响本地草稿与记录；“运行”不会发起原站提交。
+
+这需要加载项目的 `browser-extension/` Chrome 联动扩展；Codex 已连接 Chrome 不代表本地网站已连接。默认关闭，未检测到项目扩展时不可勾选。安装、权限与接口兼容性说明见 [浏览器联动](browser-extension/README.md)。遇到登录、验证码或未确认结果时，到原站处理；扩展不会自动重复提交。官方提交历史保存在 LeetCode 账号中。
+
 ## 项目结构
 
 ```text
 frontend/              React + TypeScript + Monaco 界面
 backend/               FastAPI API、SQLite 持久化与 Docker 判题
 backend/judge/         Python 镜像与结构适配器
+browser-extension/     可选的 Chrome 原站提交联动
 data/catalog.json      章节、题目、参考解及项目测试集
 data/content/          导入的博客笔记与图片
+data/translations/     可维护的中文笔记与源文件摘要
 scripts/               安装、启动、停止、导入工具
 docs/                  数据维护与验证说明
 runtime/               本机草稿、进度、提交记录与日志（Git 忽略）
@@ -76,8 +90,10 @@ runtime/               本机草稿、进度、提交记录与日志（Git 忽�
 ./scripts/dev.sh                       # API + 前端开发服务
 .venv/bin/python scripts/check_content.py
 .venv/bin/python scripts/test_import_notes.py
+.venv/bin/python scripts/test_catalog.py
 .venv/bin/python -m pytest backend/tests -q
 npm --prefix frontend test
+npm --prefix browser-extension test
 npm --prefix frontend run build
 .venv/bin/python -m backend.validate_catalog --include-examples --workers 2 # 全题库真实 Docker 回归
 ```
@@ -98,7 +114,18 @@ npm --prefix frontend run build
 
 ## 本地数据与 Git 回滚
 
-草稿、复习标记、提交和进度存放在 `runtime/` 下 SQLite 数据库中。备份时先停止服务，再复制整个 `runtime/` 文件夹；恢复时停止服务并放回备份。重建前端与更新题库不会清除个人记录。
+记录默认保存在 **`runtime/recap.sqlite3`**，可以通过 `RECAP_DB_PATH` 修改位置：
+
+| 记录 | 保存位置与内容 |
+| --- | --- |
+| 当前代码草稿 | SQLite 的 `progress.draft`，按题目自动保存；停止输入约 650 毫秒后写入 |
+| 提交历史 | SQLite 的 `submissions`，包含提交时的完整代码、判题结果和时间 |
+| 通过、复习、继续学习 | SQLite 的 `progress` 与 `settings` |
+| 尚未写入数据库的草稿 | 当前浏览器的 localStorage，键名为 `recap:recovery:<题目ID>`；保存成功后清除对应缓存 |
+
+“运行”只测试代码，不新增提交记录；“提交”才生成历史记录。草稿不是逐题保存的 `.py` 文件，Git 也不跟踪这些个人记录。
+
+备份时先停止服务，再复制整个 `runtime/` 文件夹；恢复时停止服务并放回备份。重建前端、更新题库和代码回滚不会清除数据库中已经保存的个人记录。
 
 ```sh
 git log --oneline                      # 查看阶段性提交

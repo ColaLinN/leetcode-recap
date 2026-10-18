@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from backend.database import Store
+from backend.editor import router as editor_router
 from backend.judge_client import DockerJudge
 
 
@@ -47,6 +48,7 @@ def create_app(data_dir=None, database_path=None, judge=None, frontend_dir=None)
     judge = judge or DockerJudge()
     app = FastAPI(title="LeetCode Recap", version="1.0.0", docs_url="/api/docs", openapi_url="/api/openapi.json", redoc_url=None)
     app.state.store, app.state.judge = store, judge
+    app.include_router(editor_router)
 
     @app.middleware("http")
     async def local_only(request: Request, call_next):

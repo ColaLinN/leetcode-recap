@@ -6,6 +6,7 @@ Updating notes preserves the curated catalog and all local progress in SQLite.
 """
 from __future__ import annotations
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -14,6 +15,38 @@ from urllib.parse import unquote, quote, urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE = Path.home() / 'guzheng/github/blog/fenglyu-doc-site-v1/docs/leetcode/topics'
+
+
+def apply_chinese_translation(note: dict, original_body: str, data_dir: Path) -> None:
+    """Apply an editable local overlay while retaining the imported source.
+
+    Translation sources live separately from generated content, so importing or
+    rebuilding the catalog cannot erase them. The digest covers the displayed
+    original (after frontmatter removal and asset URL normalization).
+    """
+    translations = data_dir / 'translations'
+    index_path = translations / 'notes.json'
+    if not index_path.exists():
+        return
+    index = json.loads(index_path.read_text(encoding='utf-8'))
+    if index.get('version') != 1:
+        raise ValueError(f'不支持的中文笔记索引版本：{index_path}')
+    entry = index.get('notes', {}).get(note['id'])
+    if entry is None:
+        return
+    translated_path = (translations / entry['path']).resolve()
+    if not translated_path.is_relative_to(translations.resolve()):
+        raise ValueError(f'中文笔记路径超出翻译目录：{entry["path"]}')
+    translated_body = translated_path.read_text(encoding='utf-8')
+    output_path = data_dir / 'content' / 'zh' / (note['id'] + '.md')
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(translated_body, encoding='utf-8')
+    note['originalTitle'] = note['title']
+    note['title'] = entry['title']
+    note['chinesePath'] = output_path.relative_to(data_dir).as_posix()
+    note['originalProblemLinks'] = note['problemLinks']
+    note['problemLinks'] = extract_problem_links(translated_body)
+    note['translationStale'] = entry.get('sourceSha256') != hashlib.sha256(original_body.encode('utf-8')).hexdigest()
 
 
 def extract_problem_links(markdown: str) -> list[dict]:
@@ -80,8 +113,10 @@ def import_notes(source: Path, data_dir: Path = ROOT / 'data') -> list[dict]:
         body = re.sub(r'''(\bsrc=["'])([^"']+)(["'])''', rewrite, body)
         out = content / path.name
         out.write_text(body, encoding='utf-8')
-        notes.append({'id': path.stem, 'title': title, 'path': 'content/' + path.name,
-                      'sourcePath': str(path), 'problemLinks': extract_problem_links(original)})
+        note = {'id': path.stem, 'title': title, 'path': 'content/' + path.name,
+                'sourcePath': str(path), 'problemLinks': extract_problem_links(original)}
+        apply_chinese_translation(note, body, data_dir)
+        notes.append(note)
     return notes
 
 

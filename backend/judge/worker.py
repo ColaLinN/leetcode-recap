@@ -17,6 +17,9 @@ import traceback
 import typing
 
 
+SUBMISSION_FILENAME = "<submission>"
+
+
 class OutputLimitExceeded(Exception):
     pass
 
@@ -122,7 +125,8 @@ def execute(payload):
         "itertools": itertools, "accumulate": itertools.accumulate,
     }
     namespace.update({name: getattr(typing, name) for name in ("List", "Optional", "Tuple", "Dict", "Set", "Any", "Deque")})
-    exec(compile(payload["code"], "<submission>", "exec"), namespace)
+    # Compile the original text directly: editor and Python line numbers agree.
+    exec(compile(payload["code"], SUBMISSION_FILENAME, "exec"), namespace)
     if problem.get("kind") == "design":
         operations, arguments = payload["args"]
         constructor = namespace[problem["className"]]
@@ -140,6 +144,90 @@ def execute(payload):
         index = problem["mutates"]
         return encode(args[index], kinds[index] if index < len(kinds) else "raw")
     return encode(result, problem.get("returnType", "raw"))
+
+
+def utf16_column(line, offset, *, byte_offset=False):
+    """Convert a 0-based Python position to a 1-based Monaco column."""
+    if not isinstance(offset, int) or offset < 0:
+        return None
+    if byte_offset:
+        encoded = line.encode("utf-8")
+        if offset > len(encoded):
+            return None
+        try:
+            prefix = encoded[:offset].decode("utf-8")
+        except UnicodeDecodeError:
+            return None
+    else:
+        if offset > len(line):
+            return None
+        prefix = line[:offset]
+    return len(prefix.encode("utf-16-le")) // 2 + 1
+
+
+def runtime_location(tb, lines):
+    """Select the deepest real submission frame, excluding judge adapters."""
+    selected = None
+    while tb is not None:
+        if tb.tb_frame.f_code.co_filename == SUBMISSION_FILENAME and 1 <= tb.tb_lineno <= len(lines):
+            selected = tb
+        tb = tb.tb_next
+    if selected is None:
+        return None
+    location = {"line": selected.tb_lineno}
+    # An explicit limit also avoids a submission's sys.tracebacklimit hiding the
+    # frame. Python <3.11 has no column metadata, so a line alone is sufficient.
+    frame = traceback.extract_tb(selected, limit=1)[0]
+    column = utf16_column(lines[location["line"] - 1], getattr(frame, "colno", None), byte_offset=True)
+    if column is not None:
+        location["column"] = column
+    end_line = getattr(frame, "end_lineno", None)
+    if isinstance(end_line, int) and location["line"] <= end_line <= len(lines):
+        end_column = utf16_column(lines[end_line - 1], getattr(frame, "end_colno", None), byte_offset=True)
+        if end_column is not None:
+            location.update(endLine=end_line, endColumn=end_column)
+    return location
+
+
+def syntax_location(error, lines):
+    if error.filename != SUBMISSION_FILENAME or not isinstance(error.lineno, int) or not 1 <= error.lineno <= len(lines):
+        return None
+    location = {"line": error.lineno}
+    end_line = getattr(error, "end_lineno", None)
+    if isinstance(end_line, int) and error.lineno <= end_line <= len(lines):
+        location["endLine"] = end_line
+    # CPython's parser and compiler report SyntaxError offsets in different
+    # units for non-ASCII source. ASCII is unambiguous; otherwise mark the exact
+    # line without claiming a column that could point at the wrong character.
+    if lines[error.lineno - 1].isascii() and isinstance(error.offset, int):
+        column = utf16_column(lines[error.lineno - 1], error.offset - 1)
+        if column is not None:
+            location["column"] = column
+    end_offset = getattr(error, "end_offset", None)
+    if "endLine" in location and lines[end_line - 1].isascii() and isinstance(end_offset, int):
+        end_column = utf16_column(lines[end_line - 1], end_offset - 1)
+        if end_column is not None:
+            location["endColumn"] = end_column
+    return location
+
+
+def error_details(error, code, *, include_traceback=True):
+    lines = code.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    location = runtime_location(error.__traceback__, lines)
+    if location is None and isinstance(error, SyntaxError):
+        location = syntax_location(error, lines)
+    if include_traceback:
+        text = "".join(traceback.format_exception(type(error), error, error.__traceback__, limit=-7))[-7000:]
+    else:
+        text = str(error)[-7000:]
+    details = {}
+    if location is not None:
+        details["errorLocation"] = location
+        source = lines[location["line"] - 1]
+        excerpt = source[:500] + ("…" if len(source) > 500 else "")
+        text += f"\n用户代码第 {location['line']} 行：\n{location['line']:>4} | {excerpt}"
+    details["error"] = text
+    return details
 
 
 def main():
@@ -160,9 +248,9 @@ def main():
         if len(encoded_actual) > 65536:
             raise OutputLimitExceeded("返回值超过 64 KiB 限制")
     except OutputLimitExceeded as error:
-        result.update(status="Output Limit Exceeded", actual=None, error=str(error))
-    except BaseException:
-        result.update(status="Runtime Error", actual=None, error=traceback.format_exc(limit=7)[-8000:])
+        result.update(status="Output Limit Exceeded", actual=None, **error_details(error, payload["code"], include_traceback=False))
+    except BaseException as error:
+        result.update(status="Runtime Error", actual=None, **error_details(error, payload["code"]))
     result.update(stdout=output.getvalue(), elapsedMs=round((time.perf_counter() - start) * 1000, 2))
     protocol.write(dumps(result, ensure_ascii=False, allow_nan=False))
     protocol.flush()

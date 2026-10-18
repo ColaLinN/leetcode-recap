@@ -3,6 +3,7 @@ import {
   BookOpen,
   Bookmark,
   Check,
+  ChevronDown,
   ChevronRight,
   Home,
   Layers3,
@@ -25,6 +26,7 @@ import {
   SearchResults,
 } from "./Pages";
 import Workspace from "./Workspace";
+import { activeLearningPart, buildLearningParts, expandActivePart } from "./learningPath";
 export default function App() {
   const [route, setRoute] = useState<Route>(parseRoute);
   const [catalog, setCatalog] = useState<Catalog | null>(null);
@@ -33,6 +35,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [expandedParts, setExpandedParts] = useState<Record<string, boolean>>({ 数据结构: false, 算法: false });
   const searchRef = useRef<HTMLInputElement>(null);
   const load = useCallback(async () => {
     setError("");
@@ -95,6 +98,11 @@ export default function App() {
   const activeChapter = catalog?.chapters.find(
     (chapter) => chapter.id === route.id,
   );
+  const learningParts = catalog ? buildLearningParts(catalog) : [];
+  const activePart = catalog ? activeLearningPart(catalog, route) : undefined;
+  useEffect(() => {
+    setExpandedParts((expanded) => activePart ? expandActivePart(expanded, activePart.id) : { 数据结构: false, 算法: false });
+  }, [activePart?.id, route.kind, route.id, route.chapterId]);
   const updateReview = async (id: string, review: boolean) => {
     await api(`/api/problems/${id}/review`, {
       method: "PUT",
@@ -152,43 +160,62 @@ export default function App() {
           </button>
         </nav>
         <div className="sidebar-label chapter-label">
-          学习路径 <span>{catalog?.chapters.length ?? "—"} 章</span>
+          学习路径 <span>{learningParts.length || "—"} 大章节 · {catalog?.chapters.length ?? "—"} 专题</span>
         </div>
-        <nav className="chapter-nav">
-          {catalog?.chapters.map((chapter, index) => {
-            const total = chapter.problemIds.length;
-            const done = chapter.problemIds.filter(
-              (id) => catalog.progress[id]?.accepted,
-            ).length;
-            return (
+        <nav className="chapter-nav" aria-label="章节学习路径">
+          {learningParts.map((part) => (
+            <div className="learning-nav-part" key={part.id}>
               <button
-                className={
-                  route.kind === "chapter" && route.id === chapter.id
-                    ? "active"
-                    : ""
-                }
-                onClick={() => go("chapter", chapter.id)}
-                key={chapter.id}
-                title={chapter.title}
+                className={`learning-nav-toggle ${activePart?.id === part.id ? "current" : ""}`}
+                aria-expanded={Boolean(expandedParts[part.id])}
+                aria-controls={`nav-${part.key}`}
+                onClick={() => setExpandedParts((expanded) => ({ ...expanded, [part.id]: !expanded[part.id] }))}
               >
-                <span
-                  className={`chapter-dot ${done === total && total > 0 ? "done" : ""}`}
-                >
-                  {done === total && total > 0 ? (
-                    <Check size={11} />
-                  ) : (
-                    String(index + 1).padStart(2, "0")
-                  )}
-                </span>
-                <span>{chapter.title}</span>
-                {done > 0 && (
-                  <i>
-                    {done}/{total}
-                  </i>
-                )}
+                <span className="learning-nav-number">{part.number}</span>
+                <span className="learning-nav-title"><small>{part.label}</small><strong>{part.id}</strong></span>
+                <span className="learning-nav-count">{part.chapters.length} 专题</span>
+                <ChevronDown size={14} className={expandedParts[part.id] ? "" : "is-collapsed"} />
               </button>
-            );
-          })}
+              <div className="learning-nav-topics" id={`nav-${part.key}`} hidden={!expandedParts[part.id]}>
+                {part.chapters.map((chapter) => {
+                  const index = catalog!.chapters.indexOf(chapter);
+                  const total = chapter.problemIds.length;
+                  const done = chapter.problemIds.filter(
+                    (id) => catalog!.progress[id]?.accepted,
+                  ).length;
+                  return (
+                    <button
+                      aria-current={route.kind === "chapter" && route.id === chapter.id ? "page" : undefined}
+                      className={
+                        route.kind === "chapter" && route.id === chapter.id
+                          ? "active"
+                          : ""
+                      }
+                      onClick={() => go("chapter", chapter.id)}
+                      key={chapter.id}
+                      title={chapter.title}
+                    >
+                      <span
+                        className={`chapter-dot ${done === total && total > 0 ? "done" : ""}`}
+                      >
+                        {done === total && total > 0 ? (
+                          <Check size={11} />
+                        ) : (
+                          String(index + 1).padStart(2, "0")
+                        )}
+                      </span>
+                      <span>{chapter.title}</span>
+                      {done > 0 && (
+                        <i>
+                          {done}/{total}
+                        </i>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </nav>
         <div className="sidebar-bottom">
           <div className="local-badge">
@@ -224,6 +251,9 @@ export default function App() {
               </button>
               <span>我的工作台</span>
               <ChevronRight size={13} />
+              {route.kind === "chapter" && activePart && (
+                <><span>{activePart.id}</span><ChevronRight size={13} /></>
+              )}
               <strong>
                 {route.kind === "chapter"
                   ? activeChapter?.title

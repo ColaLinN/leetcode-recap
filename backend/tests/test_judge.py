@@ -66,6 +66,46 @@ def test_real_custom_reference_computes_expected(docker):
     assert result["results"][0]["actual"] == 34
 
 
+@pytest.mark.parametrize("code,line,error_type", [
+    ("class Solution\n    def solve(self):\n        return 1", 1, "SyntaxError"),
+    ("class Solution:\n    def solve(self):\n    return 1", 3, "IndentationError"),
+    ("class Solution:\n    def solve(self):\n        return 1 / 0", 3, "ZeroDivisionError"),
+    ("class Solution:\n    def solve(self):\n        def nested():\n            return 1 / 0\n        return nested()", 4, "ZeroDivisionError"),
+    ("import sys\nsys.tracebacklimit = 0\nclass Solution:\n    def solve(self):\n        return 1 / 0", 5, "ZeroDivisionError"),
+    ("class Solution:\n    def solve(self):\n        compile('broken =', '<generated>', 'exec')", 3, "SyntaxError"),
+    ("\n\nclass Solution:\r\n    def solve(self):\r\n        return missing_name", 5, "NameError"),
+])
+def test_real_docker_error_locations_preserve_original_user_lines(docker, code, line, error_type):
+    result = docker.execute({"method": "solve"}, code, [{"args": [], "expected": 1}])
+    assert result["status"] == "Runtime Error", result
+    case = result["results"][0]
+    assert case["errorLocation"]["line"] == line, case
+    assert error_type in case["error"]
+    assert f"用户代码第 {line} 行：" in case["error"]
+    assert code.replace("\r\n", "\n").split("\n")[line - 1] in case["error"]
+
+
+def test_real_docker_runtime_columns_are_utf16_and_syntax_unicode_is_line_only(docker):
+    source_line = '        title = "😀"; return 1 / 0'
+    code = "class Solution:\n    def solve(self):\n" + source_line
+    case = docker.execute({"method": "solve"}, code, [{"args": [], "expected": 1}])["results"][0]
+    start = len(source_line[:source_line.index("1 / 0")].encode("utf-16-le")) // 2 + 1
+    end = len(source_line.encode("utf-16-le")) // 2 + 1
+    assert case["errorLocation"] == {"line": 3, "column": start, "endLine": 3, "endColumn": end}, case
+    for invalid in ('title = "😀"; return 1', 'title = "😀"; value = )'):
+        case = docker.execute({"method": "solve"}, invalid, [{"args": [], "expected": 1}])["results"][0]
+        assert case["status"] == "Runtime Error", case
+        assert case["errorLocation"] == {"line": 1, "endLine": 1}, case
+
+
+def test_real_docker_internal_adapter_error_has_no_fabricated_user_location(docker):
+    case = docker.execute({"method": "solve"}, "class Solution: pass", [{"args": [], "expected": 1}])["results"][0]
+    assert case["status"] == "Runtime Error"
+    assert "AttributeError" in case["error"]
+    assert "errorLocation" not in case
+    assert "用户代码第" not in case["error"]
+
+
 def test_real_container_memory_process_network_and_privilege_limits(docker):
     code = """import os
 class Solution:

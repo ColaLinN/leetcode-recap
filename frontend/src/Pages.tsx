@@ -1,12 +1,9 @@
 import { useEffect, useState } from "react";
-import type { ReactNode } from "react";
 import {
   ArrowLeft,
   ArrowRight,
-  ArrowUpRight,
   BookOpen,
   Bookmark,
-  Check,
   CheckCircle2,
   ChevronRight,
   Circle,
@@ -16,14 +13,13 @@ import {
   FileText,
   FolderOpen,
   GraduationCap,
-  Layers3,
   LoaderCircle,
-  Sparkles,
 } from "lucide-react";
 import type { Catalog, Chapter, Note, Problem, Progress } from "./types";
 import { go } from "./router";
 import { Difficulty, Empty, ErrorBox, IconTile, ProgressRing } from "./ui";
 import Markdown from "./Markdown";
+import { buildLearningParts, learningPartForChapter } from "./learningPath";
 export function Dashboard({
   catalog,
   completed,
@@ -33,274 +29,88 @@ export function Dashboard({
   completed: number;
   resume: string | null;
 }) {
-  const resumeProblem = catalog.problems.find((p) => p.id === resume);
-  const nextChapter =
-    catalog.chapters.find((c) =>
-      c.problemIds.some((id) => !catalog.progress[id]?.accepted),
-    ) ?? catalog.chapters[0];
-  const [group, setGroup] = useState("全部章节");
-  const groups = ["全部章节", ...new Set(catalog.chapters.map((c) => c.group))];
-  const chapters =
-    group === "全部章节"
-      ? catalog.chapters
-      : catalog.chapters.filter((c) => c.group === group);
+  const resumeProblem = catalog.problems.find((problem) => problem.id === resume);
+  const [group, setGroup] = useState("全部");
+  const learningParts = buildLearningParts(catalog);
+  const groups = ["全部", ...learningParts.map((part) => part.id)];
   return (
     <div className="page-content dashboard">
-      <div className="page-heading">
-        <div>
-          <div className="eyebrow">
-            <span className="tiny-sparkle">✦</span> BUILD UNDERSTANDING, ONE
-            PROBLEM AT A TIME
-          </div>
-          <h1>
-            温故，知新<span className="heading-dot">.</span>
-          </h1>
-          <p>把零散的解题记忆，连成自己的知识地图。</p>
-        </div>
-        <span className="quiet-chip">
-          <span className="status-dot" />
-          个人学习空间
-        </span>
-      </div>
-      <section className="welcome-card">
-        <div className="welcome-copy">
-          <span className="pill">
-            <Sparkles size={13} />
-            为理解而练习
-          </span>
-          <h2>
-            每一道题，
-            <br />
-            都是一次新的连接。
-          </h2>
-          <p>
-            读懂一个专题，亲手写下答案。
-            <br />
-            用自己的节奏，把知识留在脑海里。
-          </p>
-          <button
-            className="button primary"
-            onClick={() =>
-              resumeProblem
-                ? go("problem", resumeProblem.id)
-                : nextChapter && go("chapter", nextChapter.id)
-            }
-          >
-            {resumeProblem ? "继续上次学习" : "开启学习旅程"}
-            <ArrowRight size={16} />
-          </button>
+      <header className="dashboard-heading">
+        <h1>学习进度</h1>
+        <div className="dashboard-actions">
+          <span className="dashboard-progress">已通过 <strong>{completed} / {catalog.problems.length}</strong></span>
           {resumeProblem && (
-            <span className="resume-caption">
-              上次停在 {resumeProblem.number}. {resumeProblem.title}
-            </span>
+            <button
+              className="button primary small"
+              onClick={() => go("problem", resumeProblem.id)}
+              title={`继续 ${resumeProblem.number}. ${resumeProblem.title}`}
+            >
+              继续学习 <ArrowRight size={14} />
+            </button>
           )}
         </div>
-        <div className="hero-art" aria-hidden="true">
-          <div className="orb orb-one" />
-          <div className="orb orb-two" />
-          <div className="art-grid" />
-          <div className="floating-note note-back">
-            <span className="mini-icon">
-              <Layers3 size={22} />
-            </span>
-            <strong>理解 · 连接 · 复习</strong>
-            <div className="mini-lines">
-              <i />
-              <i />
-              <i />
-            </div>
-          </div>
-          <div className="floating-code">
-            <div className="code-top">
-              <span />
-              <span />
-              <span />
-              <b>solution.py</b>
-            </div>
-            <code>
-              <span className="purple-text">def</span>{" "}
-              <span className="blue-text">learn</span>(today):
-              <br />
-              &nbsp;&nbsp;practice = <span className="green-text">True</span>
-              <br />
-              &nbsp;&nbsp;<span className="purple-text">return</span> today +{" "}
-              <span className="orange-text">1</span>
-            </code>
-            <div className="code-success">
-              <CheckCircle2 size={15} />
-              每天进步一点点
-            </div>
-          </div>
-          <span className="floating-check">
-            <Check size={25} />
-          </span>
-          <span className="art-star">✦</span>
-        </div>
-      </section>
-      <div className="stat-grid">
-        <Stat
-          icon={<CheckCircle2 size={20} />}
-          label="已掌握题目"
-          value={completed}
-          suffix={`/ ${catalog.problems.length}`}
-          tone="green"
-          detail="每一次通过，都是积累"
-        />
-        <Stat
-          icon={<Layers3 size={20} />}
-          label="学习章节"
-          value={catalog.chapters.length}
-          suffix="章"
-          tone="blue"
-          detail="沿着清晰的路径前进"
-        />
-        <Stat
-          icon={<BookOpen size={20} />}
-          label="专题笔记"
-          value={catalog.notes.length}
-          suffix="篇"
-          tone="purple"
-          detail="你的知识，随时回顾"
-        />
-        <Stat
-          icon={<Bookmark size={20} />}
-          label="待复习"
-          value={Object.values(catalog.progress).filter((p) => p.review).length}
-          suffix="题"
-          tone="orange"
-          detail="把还不熟悉的，再练一遍"
-          onClick={() => go("review")}
-        />
-      </div>
-      <section className="path-section">
-        <div className="section-heading">
-          <div>
-            <span className="eyebrow">YOUR LEARNING PATH</span>
-            <h2>循序渐进，构建知识体系</h2>
-          </div>
-          <div className="path-summary">
-            <ProgressRing
-              value={
-                catalog.problems.length
-                  ? completed / catalog.problems.length
-                  : 0
-              }
-              size={35}
-            />
-            <span>整体完成度</span>
-          </div>
-        </div>
-        <div className="filter-tabs">
-          {groups.map((g) => (
+      </header>
+      <div className="dashboard-pathbar">
+        <span>{learningParts.length} 大章节 · {catalog.chapters.length} 专题</span>
+        <div className="filter-tabs" aria-label="筛选学习大章节">
+          {groups.map((part) => (
             <button
-              key={g}
-              className={group === g ? "active" : ""}
-              onClick={() => setGroup(g)}
+              key={part}
+              className={group === part ? "active" : ""}
+              aria-pressed={group === part}
+              onClick={() => setGroup(part)}
             >
-              {g}
+              {part}
             </button>
           ))}
         </div>
-        <div className="chapter-grid">
-          {chapters.map((chapter) => {
-            const index = catalog.chapters.indexOf(chapter);
-            const count = chapter.problemIds.length;
-            const done = chapter.problemIds.filter(
-              (id) => catalog.progress[id]?.accepted,
-            ).length;
-            return (
-              <button
-                className="chapter-card"
-                onClick={() => go("chapter", chapter.id)}
-                key={chapter.id}
-              >
-                <div className="chapter-card-top">
-                  <IconTile index={index} />
-                  <span className="chapter-number">
-                    CHAPTER {String(index + 1).padStart(2, "0")}
-                  </span>
-                  <ArrowUpRight size={17} className="card-arrow" />
-                </div>
-                <h3>{chapter.title}</h3>
-                <p>
-                  {chapter.subtitle ||
-                    "从核心思路到动手实现，逐步掌握这个专题。"}
-                </p>
-                <div className="chapter-card-bottom">
-                  <span>
-                    <Code2 size={14} />
-                    {count} 道练习
-                  </span>
-                  <span>
-                    <FileText size={14} />
-                    {chapter.noteIds.length} 篇笔记
-                  </span>
-                  <span
-                    className={
-                      done > 0 ? "progress-label started" : "progress-label"
-                    }
-                  >
-                    {done === count && count > 0
-                      ? "已完成"
-                      : done > 0
-                        ? `${done}/${count} 已通过`
-                        : "未开始"}
-                  </span>
-                </div>
-                <div className="thin-progress">
-                  <i
-                    style={{ width: `${count ? (done / count) * 100 : 0}%` }}
-                  />
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </section>
-      <footer className="page-footer">
-        <span className="brand-footer">
-          <Layers3 size={15} />
-          recap
-        </span>
-        <span>让每一次练习，都成为长久的理解。</span>
-        <span>本地运行 · 进度私有</span>
-      </footer>
-    </div>
-  );
-}
-function Stat({
-  icon,
-  label,
-  value,
-  suffix,
-  tone,
-  detail,
-  onClick,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: number;
-  suffix: string;
-  tone: string;
-  detail: string;
-  onClick?: () => void;
-}) {
-  return (
-    <button
-      className={`stat-card ${onClick ? "clickable" : ""}`}
-      onClick={onClick}
-      disabled={!onClick}
-    >
-      <span className={`stat-icon ${tone}`}>{icon}</span>
-      <div>
-        <span className="stat-label">{label}</span>
-        <div className="stat-value">
-          {value}
-          <small>{suffix}</small>
-        </div>
-        <span className="stat-detail">{detail}</span>
       </div>
-    </button>
+      {learningParts.filter((part) => group === "全部" || group === part.id).map((part) => (
+        <section className="learning-part" key={part.id} aria-labelledby={`heading-${part.key}`}>
+          <header className="learning-part-heading">
+            <span className="learning-part-label">{part.label}</span>
+            <h2 id={`heading-${part.key}`}>{part.id}</h2>
+            <span className="learning-part-count">{part.chapters.length} 专题 · {part.problemIds.length} 题</span>
+          </header>
+          <div className="chapter-grid">
+            {part.chapters.map((chapter) => {
+              const index = catalog.chapters.indexOf(chapter);
+              const count = chapter.problemIds.length;
+              const done = chapter.problemIds.filter((id) => catalog.progress[id]?.accepted).length;
+              return (
+                <button
+                  className="chapter-card"
+                  onClick={() => go("chapter", chapter.id)}
+                  title={chapter.title}
+                  key={chapter.id}
+                >
+                  <span className="chapter-number">{String(index + 1).padStart(2, "0")}</span>
+                  <h3>{chapter.title}</h3>
+                  <p>{chapter.subtitle}</p>
+                  <div className="chapter-card-progress">
+                    <span
+                      className="chapter-progress-segments"
+                      role="progressbar"
+                      aria-label={`${chapter.title}完成进度`}
+                      aria-valuemin={0}
+                      aria-valuemax={count}
+                      aria-valuenow={done}
+                    >
+                      {[0, 1, 2].map((segment) => (
+                        <i key={segment}>
+                          <span style={{ width: `${Math.max(0, Math.min(1, (count ? done / count : 0) * 3 - segment)) * 100}%` }} />
+                        </i>
+                      ))}
+                    </span>
+                    <span>{done}/{count}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      ))}
+    </div>
   );
 }
 export function SearchResults({
@@ -329,7 +139,7 @@ export function SearchResults({
           <span className="eyebrow">SEARCH RESULTS</span>
           <h1>搜索「{query}」</h1>
           <p>
-            {problems.length} 道题目 · {chapters.length} 个章节 · {notes.length}{" "}
+            {problems.length} 道题目 · {chapters.length} 个专题 · {notes.length}{" "}
             篇笔记
           </p>
         </div>
@@ -507,10 +317,11 @@ export function ChapterPage({
   if (!chapter)
     return (
       <div className="page-content">
-        <Empty title="没有找到这个章节" />
+        <Empty title="没有找到这个专题" />
       </div>
     );
   const index = catalog.chapters.indexOf(chapter);
+  const learningPart = learningPartForChapter(chapter);
   const problems = chapter.problemIds
     .map((id) => catalog.problems.find((p) => p.id === id))
     .filter((p): p is Problem => Boolean(p));
@@ -522,15 +333,18 @@ export function ChapterPage({
     problems.find((p) => !catalog.progress[p.id]?.accepted) ?? problems[0];
   return (
     <div className="page-content chapter-page">
-      <button className="back-link" onClick={() => go("home")}>
-        <ArrowLeft size={15} />
-        学习总览
-      </button>
+      <div className="chapter-page-breadcrumb">
+        <button className="back-link" onClick={() => go("home")}>
+          <ArrowLeft size={15} />
+          学习总览
+        </button>
+      {learningPart && <><ChevronRight size={13} /><span>{learningPart.label} · {learningPart.id}</span></>}
+      </div>
       <section className="chapter-banner">
         <IconTile index={index} />
         <div className="chapter-heading">
           <span className="eyebrow">
-            CHAPTER {String(index + 1).padStart(2, "0")} · {chapter.group}
+            {chapter.group} / 专题 {String(index + 1).padStart(2, "0")}
           </span>
           <h1>{chapter.title}</h1>
           <p>{chapter.subtitle}</p>
@@ -569,7 +383,7 @@ export function ChapterPage({
           onClick={() => setTab("practice")}
         >
           <Code2 size={16} />
-          章节练习<span>{problems.length}</span>
+          专题练习<span>{problems.length}</span>
         </button>
         <button
           className={tab === "notes" ? "active" : ""}
@@ -603,7 +417,7 @@ export function ChapterPage({
             <article className="panel chapter-guide">
               <span className="quiet-chip">
                 <GraduationCap size={14} />
-                章节导读
+                专题导读
               </span>
               <Markdown text={chapter.overview} />
               {chapter.referenceUrls?.map((url) => (
@@ -671,6 +485,18 @@ export function NoteReader({
       : (notes[0]?.id ?? ""),
   );
   const note = notes.find((n) => n.id === selected);
+  const [showOriginal, setShowOriginal] = useState(false);
+  const translated = Boolean(note?.chinesePath) && !showOriginal;
+  const visibleNote = note
+    ? {
+        ...note,
+        path: translated ? note.chinesePath! : note.path,
+        title: showOriginal ? (note.originalTitle ?? note.title) : note.title,
+        problemLinks: showOriginal
+          ? (note.originalProblemLinks ?? note.problemLinks)
+          : note.problemLinks,
+      }
+    : undefined;
   if (!notes.length)
     return (
       <div className="panel">
@@ -697,20 +523,34 @@ export function NoteReader({
         ))}
       </aside>
       <article className="note-article">
-        {note && (
+        {visibleNote && (
           <>
             <div className="note-article-heading">
-              <span className="quiet-chip">
-                <BookOpen size={13} />
-                原始专题笔记
-              </span>
-              <h2>{note.title}</h2>
-              <span className="note-source" title={note.sourcePath}>
-                来源：{note.sourcePath.split("/").pop()}
+              <div className="note-reading-tools">
+                <span className="quiet-chip">
+                  <BookOpen size={13} />
+                  {translated ? "中文专题笔记" : "原始专题笔记"}
+                </span>
+                {note?.chinesePath && (
+                  <div className="note-language-toggle" role="group" aria-label="笔记语言">
+                    <button aria-pressed={!showOriginal} onClick={() => setShowOriginal(false)}>中文</button>
+                    <button aria-pressed={showOriginal} onClick={() => setShowOriginal(true)}>原文</button>
+                  </div>
+                )}
+              </div>
+              <h2>{visibleNote.title}</h2>
+              {translated && visibleNote.translationStale && (
+                <p className="translation-notice">
+                  原文已有更新，中文译文待同步。
+                  <button onClick={() => setShowOriginal(true)}>查看最新原文</button>
+                </p>
+              )}
+              <span className="note-source" title={visibleNote.sourcePath}>
+                来源：{visibleNote.sourcePath.split("/").pop()}
               </span>
             </div>
-            <ReadingLinks note={note} problems={problems} />
-            <NoteContent note={note} />
+            <ReadingLinks note={visibleNote} problems={problems} />
+            <NoteContent key={visibleNote.path} note={visibleNote} />
           </>
         )}
       </article>
@@ -760,13 +600,13 @@ function ReadingLinks({ note, problems }: { note: Note; problems: Problem[] }) {
       <p>
         <BookOpen size={13} />
         <span>
-          原文中的题目链接用于延伸阅读；仅章节练习中的精选题支持本地判题。
+          笔记中的题目链接用于延伸阅读；仅专题练习中的精选题支持本地判题。
         </span>
       </p>
       {Boolean(note.problemLinks?.length) && (
         <details>
           <summary>
-            原文题目索引<span>{note.problemLinks?.length} 题</span>
+            相关题目索引<span>{note.problemLinks?.length} 题</span>
             <ChevronRight size={12} />
           </summary>
           <div className="reading-link-list">

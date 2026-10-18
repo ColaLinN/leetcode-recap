@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import {
   ArrowLeft,
@@ -39,6 +39,10 @@ import { Difficulty, Empty, ErrorBox, formatValue, statusLabel } from "./ui";
 import Markdown from "./Markdown";
 import { NoteReader } from "./Pages";
 import ResultView from "./ResultView";
+import type { ErrorDiagnostic, ErrorNavigation, ExecutionSnapshot } from "./errorDiagnostics";
+import { createLeetCodeBridge, emptyLeetCodeBridgeState, isLeetCodePending, leetCodeSlug, submitWithSnapshot } from "./leetcodeBridge";
+import type { LeetCodeBridgeState } from "./leetcodeBridge";
+import { LeetCodeConnectPanel, LeetCodeSyncControl, LeetCodeSyncResult } from "./LeetCodeSync";
 const CodeEditor = lazy(() => import("./CodeEditor"));
 export default function Workspace({
   id,
@@ -131,8 +135,20 @@ function WorkspaceReady({
     problem.accepted ?? catalog.progress[id]?.accepted ?? false,
   );
   const [pendingReview, setPendingReview] = useState(false);
-  const [result, setResult] = useState<ExecutionResult | null>(null);
+  const [execution, setExecution] = useState<ExecutionSnapshot | null>(null);
+  const result = execution?.result ?? null;
+  const [errorNavigation, setErrorNavigation] = useState<ErrorNavigation | null>(null);
+  const navigationSequence = useRef(0);
   const [running, setRunning] = useState<"run" | "submit" | null>(null);
+  const executionBusy = useRef(false);
+  const mounted = useRef(true);
+  const [leetCodeState, setLeetCodeState] = useState<LeetCodeBridgeState>(emptyLeetCodeBridgeState);
+  const leetCodeBridge = useRef<ReturnType<typeof createLeetCodeBridge> | null>(null);
+  const [syncToLeetCode, setSyncToLeetCode] = useState(false);
+  const [showConnectPanel, setShowConnectPanel] = useState(false);
+  const closeConnectPanel = useCallback(() => setShowConnectPanel(false), []);
+  const slug = leetCodeSlug(problem.sourceUrl);
+  const remotePending = isLeetCodePending(leetCodeState.submission);
   const [runError, setRunError] = useState("");
   const [custom, setCustom] = useState(false);
   const [customArgs, setCustomArgs] = useState(
@@ -160,6 +176,21 @@ function WorkspaceReady({
     : (chapter?.noteIds
         .map((n) => catalog.notes.find((note) => note.id === n))
         .filter((n): n is Note => Boolean(n)) ?? []);
+  useEffect(() => {
+    mounted.current = true;
+    const bridge = createLeetCodeBridge(window, state => {
+      if (!mounted.current) return;
+      setLeetCodeState(state);
+      if (state.connection !== "ready") setSyncToLeetCode(false);
+    });
+    leetCodeBridge.current = bridge;
+    bridge.probe();
+    return () => {
+      mounted.current = false;
+      bridge.dispose();
+      leetCodeBridge.current = null;
+    };
+  }, [id]);
   useEffect(() => {
     void api(`/api/problems/${id}/visit`, { method: "POST" })
       .then(() => window.dispatchEvent(new Event("recap-draft-saved")))
@@ -244,7 +275,7 @@ function WorkspaceReady({
     document.body.classList.add("resizing");
   };
   const execute = async (kind: "run" | "submit") => {
-    if (running) return;
+    if (executionBusy.current || (kind === "submit" && isLeetCodePending(leetCodeBridge.current?.getState().submission ?? null))) return;
     setRunError("");
     let args: unknown[] | undefined;
     if (kind === "run" && custom) {
@@ -261,23 +292,40 @@ function WorkspaceReady({
         return;
       }
     }
+    executionBusy.current = true;
     setRunning(kind);
     setResultTab("results");
+    const executedCode = latestCode.current;
     try {
-      const output = await api<ExecutionResult>(
+      const submitLocal = (snapshot: string) => api<ExecutionResult>(
         `/api/problems/${id}/${kind}`,
-        jsonBody({ code, ...(args ? { customArgs: args } : {}) }),
+        jsonBody({ code: snapshot, ...(args ? { customArgs: args } : {}) }),
       );
-      setResult(output);
+      const output = await (kind === "submit"
+        ? submitWithSnapshot(executedCode, submitLocal, syncToLeetCode && slug ? snapshot => {
+            const bridge = leetCodeBridge.current;
+            if (!bridge) throw new Error("Chrome 联动未连接");
+            bridge.submit({ slug, code: snapshot, language: "python3" });
+          } : undefined, () => {
+            if (mounted.current && slug) setLeetCodeState(previous => ({ ...previous, connection: "unavailable", submission: { requestId: "unavailable", slug, status: "failed", error: "未能发送到 Chrome；本地提交仍会继续。" } }));
+          })
+        : submitLocal(executedCode));
+      if (!mounted.current) return;
+      setExecution({ result: output, code: executedCode });
       if (kind === "submit") {
         if (output.status === "Accepted") setAccepted(true);
         await onRefresh();
       }
     } catch (e) {
-      setRunError((e as Error).message);
+      if (mounted.current) setRunError((e as Error).message);
     } finally {
-      setRunning(null);
+      executionBusy.current = false;
+      if (mounted.current) setRunning(null);
     }
+  };
+  const navigateToError = (diagnostic: ErrorDiagnostic, sourceCode: string) => {
+    if (latestCode.current !== sourceCode) return;
+    setErrorNavigation({ ...diagnostic, code: sourceCode, requestId: ++navigationSequence.current });
   };
   const markReview = async () => {
     setPendingReview(true);
@@ -450,7 +498,7 @@ function WorkspaceReady({
                   <div className="workspace-guide">
                     <span className="quiet-chip">
                       <BookOpen size={13} />
-                      章节导读
+                      专题导读
                     </span>
                     <Markdown text={chapter.overview} />
                   </div>
@@ -472,6 +520,8 @@ function WorkspaceReady({
               <SubmissionHistory
                 id={id}
                 refreshKey={result?.submissionId}
+                currentCode={code}
+                onNavigateError={navigateToError}
                 onRestore={(restored) => {
                   changeCode(restored);
                   setRunError("");
@@ -562,6 +612,8 @@ function WorkspaceReady({
                   code={code}
                   onChange={changeCode}
                   fontSize={fontSize}
+                  execution={execution}
+                  errorNavigation={errorNavigation}
                 />
               </Suspense>
             </div>
@@ -608,6 +660,7 @@ function WorkspaceReady({
               )}
             </div>
             <div className="result-scroll">
+              <LeetCodeSyncResult submission={leetCodeState.submission} onCancel={() => leetCodeBridge.current?.cancelWaiting()} />
               {runError && <div className="inline-error">{runError}</div>}
               {resultTab === "input" ? (
                 <div className="custom-input">
@@ -646,7 +699,13 @@ function WorkspaceReady({
                   <span>Python 正在独立容器中执行</span>
                 </div>
               ) : result ? (
-                <ResultView result={result} />
+                <ResultView
+                  result={result}
+                  codeMatches={execution?.code === code}
+                  onNavigateError={(diagnostic) => {
+                    if (execution) navigateToError(diagnostic, execution.code);
+                  }}
+                />
               ) : (
                 <div className="result-placeholder">
                   <span className="terminal-icon">
@@ -663,13 +722,21 @@ function WorkspaceReady({
               )}
             </div>
           </section>
-          <footer className="run-bar">
+          <footer className="run-bar leetcode-run-bar">
             <span className="local-test-label">
               <span
                 className={`status-dot ${health?.judge.available ? "" : "warning"}`}
               />
               本地测试集 · {problem.testCount} 组
             </span>
+            <LeetCodeSyncControl
+              state={leetCodeState}
+              enabled={syncToLeetCode}
+              onEnabled={setSyncToLeetCode}
+              onConnect={() => setShowConnectPanel(true)}
+              busy={Boolean(running) || remotePending}
+              available={Boolean(slug)}
+            />
             <button
               className="button secondary"
               disabled={Boolean(running)}
@@ -684,7 +751,7 @@ function WorkspaceReady({
             </button>
             <button
               className="button primary submit-button"
-              disabled={Boolean(running)}
+              disabled={Boolean(running) || remotePending}
               onClick={() => void execute("submit")}
             >
               {running === "submit" ? (
@@ -697,6 +764,7 @@ function WorkspaceReady({
           </footer>
         </section>
       </div>
+      {showConnectPanel && <LeetCodeConnectPanel connection={leetCodeState.connection} onProbe={() => leetCodeBridge.current?.probe()} onClose={closeConnectPanel} />}
     </div>
   );
 }
@@ -752,10 +820,14 @@ function SubmissionHistory({
   id,
   refreshKey,
   onRestore,
+  currentCode,
+  onNavigateError,
 }: {
   id: string;
   refreshKey?: number;
   onRestore: (code: string) => void;
+  currentCode: string;
+  onNavigateError: (diagnostic: ErrorDiagnostic, sourceCode: string) => void;
 }) {
   const [items, setItems] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
@@ -854,7 +926,14 @@ function SubmissionHistory({
                   {restored === item.id ? "已恢复到编辑器" : "恢复这份代码"}
                 </button>
                 <Markdown text={`\`\`\`python\n${item.code}\n\`\`\``} />
-                {item.results && <ResultView result={item} />}
+                {item.results && (
+                  <ResultView
+                    result={item}
+                    codeMatches={item.code === currentCode}
+                    onNavigateError={(diagnostic) => onNavigateError(diagnostic, item.code)}
+                    isHistory
+                  />
+                )}
               </div>
             )}
           </div>

@@ -1,0 +1,155 @@
+{
+  "version": 1,
+  "notes": {
+    "240224-opposite-double-pointer": {
+      "title": "相向双指针",
+      "path": "notes/240224-opposite-double-pointer.md",
+      "sourceSha256": "7b195fbdccf9e671778979fb65e6312dec5909d4a30a122ff035a96091cc4c65"
+    },
+    "240228-same-dire-double-pointer-slide-window": {
+      "title": "同向双指针与滑动窗口",
+      "path": "notes/240228-same-dire-double-pointer-slide-window.md",
+      "sourceSha256": "ecdd192b679966968b21717e083c718d8d6e9fe61005a7bda52bc5f1502da631"
+    },
+    "240229-04-linked-list-reverse": {
+      "title": "反转链表系列",
+      "path": "notes/240229-04-linked-list-reverse.md",
+      "sourceSha256": "64f4d025e5f8131e742759a949ff78d97a9dca483c605926c21084eecd33799f"
+    },
+    "240229-binary-search": {
+      "title": "二分查找",
+      "path": "notes/240229-binary-search.md",
+      "sourceSha256": "cea555417206a228a68321b565e451eb71065716c1b6d8ec329613c5d28c7bcd"
+    },
+    "240303-05-linked-list-slow-fast-cycle": {
+      "title": "链表快慢指针系列",
+      "path": "notes/240303-05-linked-list-slow-fast-cycle.md",
+      "sourceSha256": "e1eacd22a44e246c2bb0a675583fe63ad37d851a6f31664bb267f7b9d7c2fdbc"
+    },
+    "240303-06-linked-list-remove": {
+      "title": "链表删除系列",
+      "path": "notes/240303-06-linked-list-remove.md",
+      "sourceSha256": "0bfd2c0a19cf8e681ed8ddad120e21d02814a9a7cc42ef8077ce786bc7bb6485"
+    },
+    "240305-07-binary-tree-and-recursion": {
+      "title": "二叉树与递归：最大深度",
+      "path": "notes/240305-07-binary-tree-and-recursion.md",
+      "sourceSha256": "36015041866fd02ae47fd5e7d23f3b1caf15e233bfe3012bb68ee079a60ede09"
+    },
+    "240309-08-binary-tree-and-recursion-v2": {
+      "title": "二叉树与递归：相同、对称与平衡",
+      "path": "notes/240309-08-binary-tree-and-recursion-v2.md",
+      "sourceSha256": "9d927466411f9135c20ec7be8db813470bcc56d5eecb94bbd13ea2ce0bd04cfc"
+    },
+    "240309-09-bt-front-middle-back-traversal": {
+      "title": "二叉树的前序、中序与后序遍历",
+      "path": "notes/240309-09-bt-front-middle-back-traversal.md",
+      "sourceSha256": "d7a55ed749c049a1f9ab5c92e76a9d51eac3af80b2bb7baf8c07a3a20739dca4"
+    },
+    "240309-10-bp-nearest-ancestor": {
+      "title": "二叉树与递归：最近公共祖先",
+      "path": "notes/240309-10-bp-nearest-ancestor.md",
+      "sourceSha256": "2c5d24d1e95e235b5c7bc938c8e7b6b108e6dc563414b62df7fa0ae487473f67"
+    },
+    "240311-bp-level-order-traversal": {
+      "title": "二叉树的层序遍历",
+      "path": "notes/240311-bp-level-order-traversal.md",
+      "sourceSha256": "67164a6b0128f1eb107a40fbb454b83eefbf7291733ccb0185fef7ecf11a6769"
+    },
+    "240315-backtrace-subset": {
+      "title": "回溯：子集",
+      "path": "notes/240315-backtrace-subset.md",
+      "sourceSha256": "956156aa813dc2f938ca57cdf8f03c92081f12006779cb2f0cff9141935653d0"
+    },
+    "240316-backtrace-combination": {
+      "title": "回溯：组合与剪枝",
+      "path": "notes/240316-backtrace-combination.md",
+      "sourceSha256": "d8f70251b7a7160630617faaba654f1be1d096c7207af68dd409ef7574c295ac"
+    },
+    "240324-backtrace-permutation": {
+      "title": "回溯：排列",
+      "path": "notes/240324-backtrace-permutation.md",
+      "sourceSha256": "28c4993cfb70ea08ebc2a4051eb46bb6bf693a34d3dce2374cf9d5f0c8575535"
+    },
+    "240324-dp-principle": {
+      "title": "动态规划原理",
+      "path": "notes/240324-dp-principle.md",
+      "sourceSha256": "39188b12d48557d496ffe3bcf861f6823c173920c28c1ab519e87c683e9fd1b5"
+    },
+    "240326-dp-backup": {
+      "title": "背包动态规划",
+      "path": "notes/240326-dp-backup.md",
+      "sourceSha256": "44f5f468e236e3ff384ecf0c844400180e75d9ebbcab7a144983c653a57d84f8"
+    },
+    "240329-linear-dp": {
+      "title": "线性动态规划",
+      "path": "notes/240329-linear-dp.md",
+      "sourceSha256": "90a515a71d584328a9de66e2214dfec06d24e6af511b35dee5afe89a6c4fe996"
+    },
+    "240512-dp-interval": {
+      "title": "区间动态规划",
+      "path": "notes/240512-dp-interval.md",
+      "sourceSha256": "bb2d1d4ae50c21e681a4000a13fc80a39304fb9e4910ba1fbc9d91035ac5454a"
+    },
+    "240512-dp-state-machine": {
+      "title": "状态机动态规划",
+      "path": "notes/240512-dp-state-machine.md",
+      "sourceSha256": "af088939aad7dbf7668f91ad02280345bf82b5f52f4e5411f8841fb5ffb2b892"
+    },
+    "240513-dp-tree": {
+      "title": "树形动态规划",
+      "path": "notes/240513-dp-tree.md",
+      "sourceSha256": "ae602aa544c7ad340a99a8014123f1458bde7c4716b3fea5b9a7ca3b89dd8d46"
+    },
+    "240514-monotonic-stack": {
+      "title": "单调栈",
+      "path": "notes/240514-monotonic-stack.md",
+      "sourceSha256": "a65bdcc342396d90840b91338f41c91b0cd3c2aa0908c2bf372a9aeeb5ca3598"
+    },
+    "240515-monotonic-queue": {
+      "title": "单调队列",
+      "path": "notes/240515-monotonic-queue.md",
+      "sourceSha256": "a738c00894aeba9216c3479272c757a11f4b8fd3ce53a87c60e9e2590376988c"
+    },
+    "240523-sort": {
+      "title": "排序",
+      "path": "notes/240523-sort.md",
+      "sourceSha256": "b7806640a4dfdcba87372ad6c1edbca957213e7fc8d2300415abbcc95bfe8786"
+    },
+    "240524-graph-v1-iteration": {
+      "title": "图遍历、拓扑排序与连通分量",
+      "path": "notes/240524-graph-v1-iteration.md",
+      "sourceSha256": "9abc6911d4c47ac94bd7dff4ff7e909e9b38b267d8e7bd377d195e2ea9bcb561"
+    },
+    "240524-graph-v2": {
+      "title": "图的最短路径与最小生成树",
+      "path": "notes/240524-graph-v2.md",
+      "sourceSha256": "7b25f4c06857db303d170c2a47391dd2473c407965cb1f6a0ca7b01f12c5da88"
+    },
+    "240525-heap": {
+      "title": "堆与优先队列",
+      "path": "notes/240525-heap.md",
+      "sourceSha256": "af9bac71271f0460002bc392e28fa4a543068cc72091b92a5211564a9c1d8921"
+    },
+    "240525-lru": {
+      "title": "最近最少使用缓存（LRU）",
+      "path": "notes/240525-lru.md",
+      "sourceSha256": "254b8d68f77c41c4787915a460d94817c4339f3cfb3a40cee9f4ad9809725001"
+    },
+    "eng": {
+      "title": "算法英语词汇对照",
+      "path": "notes/eng.md",
+      "sourceSha256": "021c05fd2e6a4082e94cd8193ae04f1574a9f9409086c3fa909365fe825ff47e"
+    },
+    "roadmap": {
+      "title": "算法学习路线与题单",
+      "path": "notes/roadmap.md",
+      "sourceSha256": "62503cada104b508faa5e2d31f702a98cdb8d64ef2a816f612f29873c75138d6"
+    },
+    "todolist": {
+      "title": "待学习专题",
+      "path": "notes/todolist.md",
+      "sourceSha256": "6df10797e1c0ea27833d98c38c7d702377ff6dffec4a875a087c1bc9c76886cd"
+    }
+  }
+}
