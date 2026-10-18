@@ -1212,6 +1212,74 @@ class LRUCache:
         pass
 ''','实现容量固定的最近最少使用缓存。get(key) 返回值，缺失返回 -1；命中时更新最近使用顺序。put(key,value) 新增或更新键并标记为最近使用，容量超限时删除最久未使用的键。get/put 平均 O(1)。构造和 put 输出 null。',['1 ≤ capacity ≤ 3000','0 ≤ key ≤ 10⁴','0 ≤ value ≤ 10⁵','最多 2×10⁵ 次操作'],lru_cases,lru_model,'用哈希表定位键，用双向链表维护使用先后。Python OrderedDict 同时提供这两种能力，命中或更新后移至尾部，超限弹出头部。每次操作平均 O(1)，空间 O(capacity)。',examples=[(lru_cases[0],[None,None,None,1,None,-1,None,-1,3,4])])
 
+# Keep additions on their own seed so existing problem suites remain unchanged.
+def rain_water_oracle(height):
+    """Independent prefix/suffix model, separate from the two-pointer reference."""
+    left_max = []
+    highest = 0
+    for value in height:
+        highest = max(highest, value)
+        left_max.append(highest)
+    right_max = [0] * len(height)
+    highest = 0
+    for i in range(len(height) - 1, -1, -1):
+        highest = max(highest, height[i])
+        right_max[i] = highest
+    return sum(min(left, right) - value for left, right, value in zip(left_max, right_max, height))
+
+
+rain_rng = random.Random(42)
+rain_cases = [[height] for height in [
+    [0], [100000], [0,0], [1,0], [0,1], [0,0,0], [1,1,1],
+    [0,1,2,3], [3,2,1,0], [2,0,2], [4,2,0,3,2,5],
+    [0,1,0,2,1,0,1,3,2,1,2,1], [3,0,0,3], [3,1,1,3],
+    [5,4,1,2], [2,0,3,0,1], [3,0,2,0,4], [5,0,1,0,5],
+    [0,3,0,0,2,0], [100000,0,100000],
+]] + [[rain_rng.choices(range(31), k=rain_rng.randint(1,60))] for _ in range(40)]
+add(42,'trapping-rain-water','接雨水','Hard',['数组','双指针','动态规划','单调栈'],
+    'trap(self, height: List[int]) -> int','''
+left, right = 0, len(height) - 1
+left_max = right_max = 0
+water = 0
+while left <= right:
+    left_max = max(left_max, height[left])
+    right_max = max(right_max, height[right])
+    if left_max <= right_max:
+        water += left_max - height[left]
+        left += 1
+    else:
+        water += right_max - height[right]
+        right -= 1
+return water
+''','''数组 `height` 从左到右记录柱子的高度。每根柱子宽度均为 1，高度为非负整数。雨水会从没有柱子阻挡的两侧流走，请返回所有凹槽最终能积存的雨水总量。
+
+例如 `[2,0,2]` 的中间一格能存 2 单位雨水；单调递增、单调递减或等高的柱子不能积水。
+
+返回一个整数，单位是面积为 1 的水格数量。''',
+    ['n == height.length','1 ≤ n ≤ 2×10⁴','0 ≤ height[i] ≤ 10⁵'],
+    rain_cases,rain_water_oracle,'''### 每一列能装多少水
+
+位置 `i` 的水位由左右两侧最高柱子中较矮的一侧决定：
+
+`water[i] = min(left_max[i], right_max[i]) - height[i]`
+
+这里两侧的最高值都包含当前位置，所以结果不会为负。先计算前缀最大值、后缀最大值再求和，就得到 O(n) 时间、O(n) 空间的解法。
+
+### 双指针：只结算已经确定的一侧
+
+从两端向中间扫描，分别维护已扫描区域的 `left_max` 和 `right_max`。若 `left_max ≤ right_max`，右侧已经有至少同样高的挡板，当前位置的水位就确定为 `left_max`；累加 `left_max - height[left]` 并右移左指针。另一种情况对称处理右侧。
+
+每根柱子恰好结算一次，时间 O(n)，额外空间 O(1)。例如 `[4,2,0,3,2,5]` 各列积水为 `[0,2,4,1,2,0]`，总量是 9。
+
+### 也可以用单调栈
+
+维护高度递减的柱子下标。遇到更高的柱子时，弹出凹槽底部；若栈中还剩左挡板，就按「两侧较矮高度减去槽底高度」乘以「两侧下标之差减一」累加这一层水。等高挡板、多层凹槽和弹出后栈为空都需要正确处理。每个下标入栈、出栈至多一次，时间 O(n)，空间 O(n)。
+
+### 容易混淆的地方
+
+本题要求所有凹槽的积水总量；《盛最多水的容器》只选择两根柱子求最大面积，不能直接复用那道题的面积计算。只有一根或两根柱子时答案是 0。''',
+    examples=[([[0,1,0,2,1,0,1,3,2,1,2,1]],6), ([[4,2,0,3,2,5]],9)])
+
 # Cross-topic problems keep a single identity, draft, history and progress record.
 CHAPTERS = [
 ('arrays-hashing','数组与哈希表','从线性扫描到快速索引','数据结构',['two-sum','valid-anagram','product-of-array-except-self'],['roadmap','eng','240523-sort'],
@@ -1226,8 +1294,8 @@ CHAPTERS = [
  '快慢指针以不同速度遍历同一条链，可寻找中点或判断环。LRU 则把哈希定位与双向链表顺序结合，缓存访问后移动到最近使用端。','环检测要比较结点身份而非节点值。偶数长度中点需确认取前一个还是后一个；LRU 更新已有键也算一次使用。','中间结点 → 环形链表 → LRU 缓存。前两题 O(n)，LRU 单次操作平均 O(1)。'),
 ('stack-queue','栈与队列','后进先出与先进先出','数据结构',['valid-parentheses','min-stack','implement-queue-using-stacks'],['roadmap'],
  '栈适合管理尚未完成且后来的先处理的任务；队列适合按进入顺序处理。辅助状态可随栈元素一起保存，两个栈可以实现均摊常数时间的队列。','括号必须类型与嵌套顺序都匹配。最小值重复出现时也要正确恢复；输出栈非空时不应重复搬运输入栈。','有效括号 → 最小栈 → 双栈队列。区分最坏单次成本与均摊成本。'),
-('monotonic','单调栈与单调队列','维护永远可能有用的候选','数据结构',['daily-temperatures','largest-rectangle-in-histogram','sliding-window-maximum'],['240514-monotonic-stack','240515-monotonic-queue'],
- '单调结构通过淘汰被当前元素支配的候选来避免重复比较。栈用于求下一个更大或更小元素，队列还需要移除过期的窗口下标。','保存下标才能计算距离和判断是否过期。严格大于与大于等于会影响重复值处理；柱状图注意两端哨兵。','每日温度 → 滑动窗口最大值 → 最大矩形。每个下标入出各一次，时间通常 O(n)。'),
+('monotonic','单调栈与单调队列','维护永远可能有用的候选','数据结构',['daily-temperatures','trapping-rain-water','largest-rectangle-in-histogram','sliding-window-maximum'],['240514-monotonic-stack','240515-monotonic-queue'],
+ '单调结构通过淘汰被当前元素支配的候选来避免重复比较。栈用于求下一个更大或更小元素，也能按层计算接雨水；队列还需要移除过期的窗口下标。','保存下标才能计算距离和判断是否过期。严格大于与大于等于会影响重复值处理；接雨水注意弹出槽底后左挡板是否仍存在，柱状图注意两端哨兵。','每日温度 → 接雨水 → 最大矩形 → 滑动窗口最大值。每个下标入出各一次，时间通常 O(n)。'),
 ('heap','堆与优先队列','持续维护极值候选','数据结构',['last-stone-weight','kth-largest-element-in-an-array','sliding-window-maximum'],['240525-heap','240523-sort'],
  '堆能在动态集合中快速取最小值。Python heapq 是小根堆，取最大值可存负数；维护第 K 大时保留 K 个最大值的小根堆。','第 K 大包含重复值。使用负数模拟大根堆时，小心弹出后符号转换；固定窗口堆还需要清理过期元素。','最后一块石头 → 第 K 大 → 用堆重新尝试滑动窗口最大值。插入弹出 O(log n)。'),
 ('tree-recursion','二叉树递归','明确子问题返回什么','数据结构',['maximum-depth-of-binary-tree','same-tree','diameter-of-binary-tree'],['240305-07-binary-tree-and-recursion','240309-08-binary-tree-and-recursion-v2'],
@@ -1240,8 +1308,8 @@ CHAPTERS = [
  '先辨别图是有向还是无向、有权还是无权。连通块用 DFS/BFS，依赖关系用拓扑排序，非负边单源最短路可用 Dijkstra。','访问标记要在入栈或入队时完成。不能把无向连通概念直接套在课程依赖上；Dijkstra 不支持负权边。','岛屿数量 → 课程表 → 网络延迟时间。最后一题顺便复习优先队列。'),
 ('trie','字典树','共享前缀，区分路径与完整单词','数据结构',['implement-trie-prefix-tree'],['roadmap'],
  '字典树按字符逐层连接节点，共有前缀的单词共享同一条路径。插入时建立缺失的节点，查询时逐字符前进，并用独立的结束标记记录完整单词。','路径存在只说明前缀存在，search 还必须检查结束标记；startsWith 不要求结束标记。重复插入不能破坏已有单词或前缀。','通过实现 Trie 分别练习 insert、search 与 startsWith，并对照同一字符串作为前缀和完整单词时的不同结果。单次操作时间 O(L)，空间取决于新增字符路径的数量。'),
-('two-pointers','相向双指针','从两端收缩候选空间','算法',['valid-palindrome','3sum','container-with-most-water'],['240224-opposite-double-pointer'],
- '在有序性或单调性支持下，从两端同时观察可以一次排除一批候选。排序后固定一个元素，再在余下区间使用相向双指针。','三数之和需要对结果去重；盛水容器移动短边有证明依据，不能套用为任意问题的通用规则。','验证回文串 → 盛最多水的容器 → 三数之和。双指针扫描 O(n)，固定一层后通常为 O(n²)。'),
+('two-pointers','相向双指针','从两端收缩候选空间','算法',['valid-palindrome','3sum','container-with-most-water','trapping-rain-water'],['240224-opposite-double-pointer'],
+ '在有序性或单调性支持下，从两端同时观察可以一次排除一批候选。排序后固定一个元素，再在余下区间使用相向双指针；接雨水则维护两端最高挡板，结算水位已经确定的一侧。','三数之和需要对结果去重；盛水容器求两根柱子的最大面积，接雨水求所有凹槽的积水总量，两题不能混用面积公式。','验证回文串 → 盛最多水的容器 → 接雨水 → 三数之和。双指针扫描 O(n)，固定一层后通常为 O(n²)。'),
 ('sliding-window','滑动窗口','把连续区间维护成状态','算法',['longest-substring-without-repeating-characters','minimum-size-subarray-sum','max-consecutive-ones-iii'],['240228-same-dire-double-pointer-slide-window'],
  '右端扩展窗口，更新区间状态；条件不满足时移动左端恢复合法性。判断题目是在求合法窗口最大值还是达标窗口最小值。','最短子数组的和需要正数单调性，负数输入不能直接复用该解法。注意 k=0 与整个数组都合法的情况。','先练无重复字符，再做最短和与最多翻转 k 个零。两端各走一遍，时间 O(n)。'),
 ('prefix-sums','前缀和与前后缀','把区间查询变成差值','算法',['range-sum-query-immutable','subarray-sum-equals-k','product-of-array-except-self'],['roadmap'],
@@ -1339,6 +1407,9 @@ def add_scale_cases():
     case('set-matrix-zeroes',[matrix],[[0 if i==25 or j==25 else 1 for j in range(50)] for i in range(50)])
     case('3sum',[[0]*1000],[[0,0,0]])
     case('container-with-most-water',[[1]*10000],9999)
+    case('trapping-rain-water',[[100000]+[0]*19998+[100000]],1999800000)
+    case('trapping-rain-water',[list(range(20000))],0)
+    case('trapping-rain-water',[[100000,0]*10000],999900000)
     case('minimum-size-subarray-sum',[500,[1]*10000],500)
     case('max-consecutive-ones-iii',[[0,1]*5000,3],7)
     case('subarray-sum-equals-k',[[0]*10000,0],50005000)
@@ -1386,9 +1457,16 @@ def add_scale_cases():
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--source',type=Path,default=DEFAULT_SOURCE)
+    parser.add_argument('--keep-notes',action='store_true',help='重用现有笔记索引；只更新本地题目，不重新导入博客')
     args=parser.parse_args()
     add_scale_cases()
-    notes=import_notes(args.source, ROOT/'data')
+    if args.keep_notes:
+        existing=ROOT/'data/catalog.json'
+        if not existing.is_file():
+            raise SystemExit('--keep-notes 需要已有的 data/catalog.json')
+        notes=json.loads(existing.read_text(encoding='utf-8'))['notes']
+    else:
+        notes=import_notes(args.source, ROOT/'data')
     chapters=build_chapters(notes)
     by_id={p['id']:p for p in PROBLEMS}
     assert len(by_id)==len(PROBLEMS)
