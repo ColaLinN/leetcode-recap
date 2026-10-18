@@ -55,7 +55,9 @@ export function createLeetCodeBridge(host: BridgeHost, onChange: (state: LeetCod
   let state: LeetCodeBridgeState = { ...emptyLeetCodeBridgeState };
   let disposed = false;
   let probeId: string | null = null;
+  let probeGeneration = 0;
   let probeTimer: ReturnType<typeof setTimeout> | undefined;
+  let probeRetryTimer: ReturnType<typeof setTimeout> | undefined;
   let submitTimer: ReturnType<typeof setTimeout> | undefined;
   function update(next: LeetCodeBridgeState) {
     if (disposed) return;
@@ -64,6 +66,32 @@ export function createLeetCodeBridge(host: BridgeHost, onChange: (state: LeetCod
   }
   function send(type: string, id: string, payload?: LeetCodeSubmitPayload) {
     host.postMessage({ source: "leetcode-recap-app", version: 1, type, requestId: id, ...(payload ? { payload } : {}) }, host.location.origin);
+  }
+  function clearProbe() {
+    probeGeneration++;
+    probeId = null;
+    clearTimeout(probeTimer);
+    clearTimeout(probeRetryTimer);
+  }
+  function probeAttempt(generation: number, attempt: number) {
+    if (disposed || generation !== probeGeneration) return;
+    const id = requestId();
+    probeId = id;
+    const missed = () => {
+      if (disposed || generation !== probeGeneration || probeId !== id) return;
+      clearTimeout(probeTimer);
+      probeId = null;
+      if (attempt < 2) {
+        // A document_idle content script can attach after React's first ping.
+        // Only connection probes retry; submitting code is always a single send.
+        probeRetryTimer = setTimeout(() => probeAttempt(generation, attempt + 1), 250 * (attempt + 1));
+      } else {
+        update({ ...state, connection: "unavailable" });
+      }
+    };
+    probeTimer = setTimeout(missed, options.probeTimeoutMs ?? 1800);
+    try { send("LEETCODE_PING", id); }
+    catch { missed(); }
   }
   function cancelWaiting() {
     if (!isLeetCodePending(state.submission) || !state.submission) return;
@@ -79,8 +107,7 @@ export function createLeetCodeBridge(host: BridgeHost, onChange: (state: LeetCod
     const message = data as Record<string, unknown>;
     if (message.source !== "leetcode-recap-extension" || message.version !== 1 || typeof message.requestId !== "string") return;
     if (message.type === "LEETCODE_PONG" && message.requestId === probeId && message.status === "ready" && message.browser === "chrome") {
-      clearTimeout(probeTimer);
-      probeId = null;
+      clearProbe();
       update({ ...state, connection: "ready" });
       return;
     }
@@ -104,19 +131,9 @@ export function createLeetCodeBridge(host: BridgeHost, onChange: (state: LeetCod
     getState: () => state,
     probe() {
       if (disposed) return;
-      clearTimeout(probeTimer);
-      probeId = requestId();
+      clearProbe();
       update({ ...state, connection: "checking" });
-      probeTimer = setTimeout(() => {
-        probeId = null;
-        update({ ...state, connection: "unavailable" });
-      }, options.probeTimeoutMs ?? 1800);
-      try { send("LEETCODE_PING", probeId); }
-      catch {
-        clearTimeout(probeTimer);
-        probeId = null;
-        update({ ...state, connection: "unavailable" });
-      }
+      probeAttempt(probeGeneration, 0);
     },
     submit(payload: LeetCodeSubmitPayload): boolean {
       if (disposed || isLeetCodePending(state.submission)) return false;
@@ -147,8 +164,7 @@ export function createLeetCodeBridge(host: BridgeHost, onChange: (state: LeetCod
       if (disposed) return;
       cancelWaiting();
       disposed = true;
-      probeId = null;
-      clearTimeout(probeTimer);
+      clearProbe();
       clearTimeout(submitTimer);
       host.removeEventListener("message", receive);
     },

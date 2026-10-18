@@ -46,8 +46,12 @@ function harness() {
     const requestId = sent.at(-1).message.requestId;
     receive({ type: 'LEETCODE_PONG', requestId, status: 'ready', browser: 'chrome' });
   }
-  return { module, bridge, host, sent, changes, listeners, receive, ready,
-    expire: () => { const callbacks = [...timers.values()]; timers.clear(); for (const callback of callbacks) callback(); } };
+  function expire() { const callbacks = [...timers.values()]; timers.clear(); for (const callback of callbacks) callback(); }
+  function expireAll() {
+    for (let turn = 0; timers.size > 0 && turn < 20; turn++) expire();
+    assert.equal(timers.size, 0, 'timers must settle after a bounded number of probe attempts');
+  }
+  return { module, bridge, host, sent, changes, listeners, receive, ready, expire, expireAll };
 }
 const payload = { slug: 'two-sum', language: 'python3', code: 'class Solution:\n    pass' };
 
@@ -57,8 +61,11 @@ test('no extension remains unavailable and cannot submit or fabricate a ready st
   assert.equal(h.bridge.getState().connection, 'checking');
   assert.equal(h.sent[0].message.type, 'LEETCODE_PING');
   assert.equal(h.sent[0].origin, h.host.location.origin);
-  h.expire();
+  h.expireAll();
   assert.equal(h.bridge.getState().connection, 'unavailable');
+  const probes = h.sent.filter(entry => entry.message.type === 'LEETCODE_PING');
+  assert.equal(probes.length, 3);
+  assert.equal(new Set(probes.map(entry => entry.message.requestId)).size, 3);
   assert.equal(h.bridge.submit(payload), false);
   assert.equal(h.sent.some(entry => entry.message.type === 'LEETCODE_SUBMIT'), false);
   assert.equal(h.bridge.getState().submission.status, 'failed');
@@ -89,9 +96,61 @@ test('a late or previous probe response cannot claim a new connection', () => {
   h.receive({ type: 'LEETCODE_PONG', requestId: first, status: 'ready', browser: 'chrome' });
   assert.equal(h.bridge.getState().connection, 'checking');
   const last = h.sent.at(-1).message.requestId;
-  h.expire();
+  h.expireAll();
   h.receive({ type: 'LEETCODE_PONG', requestId: last, status: 'ready', browser: 'chrome' });
   assert.equal(h.bridge.getState().connection, 'unavailable');
+  h.bridge.dispose();
+});
+
+test('a content script that misses the first ping can connect on the second bounded attempt', () => {
+  const h = harness();
+  h.bridge.probe();
+  const first = h.sent[0].message.requestId;
+  h.expire(); // First response window expires; wait for the short retry backoff.
+  assert.equal(h.sent.length, 1);
+  assert.equal(h.bridge.getState().connection, 'checking');
+  h.receive({ type: 'LEETCODE_PONG', requestId: first, status: 'ready', browser: 'chrome' });
+  assert.equal(h.bridge.getState().connection, 'checking');
+  h.expire();
+  const second = h.sent.at(-1).message.requestId;
+  assert.notEqual(second, first);
+  h.receive({ type: 'LEETCODE_PONG', requestId: first, status: 'ready', browser: 'chrome' });
+  assert.equal(h.bridge.getState().connection, 'checking');
+  h.receive({ type: 'LEETCODE_PONG', requestId: second, status: 'ready', browser: 'chrome' });
+  assert.equal(h.bridge.getState().connection, 'ready');
+  h.expireAll();
+  assert.equal(h.sent.length, 2);
+  assert.equal(h.sent.some(entry => entry.message.type === 'LEETCODE_SUBMIT'), false);
+  h.bridge.dispose();
+});
+
+test('disposing during backoff cancels queued connection probes', () => {
+  const h = harness();
+  h.bridge.probe();
+  h.expire();
+  const changes = h.changes.length;
+  h.bridge.dispose();
+  h.expireAll();
+  h.bridge.probe();
+  assert.equal(h.sent.length, 1);
+  assert.equal(h.changes.length, changes);
+  assert.equal(h.listeners.size, 0);
+});
+
+test('a manual new probe clears the previous backoff and keeps only its own attempt valid', () => {
+  const h = harness();
+  h.bridge.probe();
+  const old = h.sent[0].message.requestId;
+  h.expire();
+  h.bridge.probe();
+  const current = h.sent.at(-1).message.requestId;
+  assert.equal(h.sent.length, 2);
+  h.receive({ type: 'LEETCODE_PONG', requestId: old, status: 'ready', browser: 'chrome' });
+  assert.equal(h.bridge.getState().connection, 'checking');
+  h.receive({ type: 'LEETCODE_PONG', requestId: current, status: 'ready', browser: 'chrome' });
+  h.expireAll();
+  assert.equal(h.bridge.getState().connection, 'ready');
+  assert.equal(h.sent.length, 2);
   h.bridge.dispose();
 });
 
