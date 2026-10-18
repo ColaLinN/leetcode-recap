@@ -162,6 +162,40 @@ def test_group_rename_archive_and_unknown_group_are_explicit(fixture):
     assert client.get(f'/api/practice-groups/{group}/sessions?offset=-1').status_code == 422
 
 
+def test_archive_restore_preserves_entire_practice_after_restart(fixture):
+    client, _, options = fixture
+    group = new_group(client, name='保留的复习')['id']
+    url = f'/api/problems/sum?group_id={group}'
+    client.put(f'/api/problems/sum/draft?group_id={group}', json={'code': 'my newer draft', 'sessionId': 'archive-session'})
+    client.put(f'/api/problems/sum/review?group_id={group}', json={'review': True})
+    for kind in ('run', 'submit'):
+        response = client.post(f'/api/problems/sum/{kind}?group_id={group}', json={
+            'code': kind + ' code', 'sessionId': 'archive-session', 'requestId': 'archive-' + kind})
+        assert response.status_code == 200
+    group_url = f'/api/practice-groups/{group}'
+    history_url = f'/api/problems/sum/submissions?group_id={group}&include_runs=true'
+    state = client.get(url).json()
+    detail = client.get(group_url).json()
+    history = client.get(history_url).json()
+    sessions = client.get(group_url + '/sessions').json()
+    assert state['draft'] == 'my newer draft' and state['accepted'] and state['review']
+    assert len(history['submissions']) == 2
+    assert sessions['total'] == 1
+    assert client.patch(group_url, json={'archived': True}).json()['archivedAt']
+    client = TestClient(create_app(**options))
+    archived = next(g for g in client.get('/api/practice-groups').json()['groups'] if g['id'] == group)
+    assert archived['archivedAt']
+    assert client.get(url).json() == state
+    assert client.get(history_url).json() == history
+    assert client.get(group_url + '/sessions').json() == sessions
+    assert client.patch(group_url, json={'archived': False}).json()['archivedAt'] is None
+    restored = client.get(group_url).json()
+    assert {k: v for k, v in restored.items() if k != 'updatedAt'} == {k: v for k, v in detail.items() if k != 'updatedAt'}
+    assert client.get(url).json() == state
+    assert client.get(history_url).json() == history
+    assert client.get(group_url + '/sessions').json() == sessions
+
+
 def test_custom_run_replays_without_recomputing_reference_and_rejects_changed_input(fixture):
     client, judge, _ = fixture
     body = {'code': 'answer', 'customArgs': [[5, 6]], 'requestId': 'custom-once', 'sessionId': 'custom-visit'}

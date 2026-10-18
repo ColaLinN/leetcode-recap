@@ -17,7 +17,6 @@ import {
 } from "lucide-react";
 import type { Catalog, Chapter, Note, Problem, Progress, PracticeGroup } from "./types";
 import { go } from "./router";
-import PracticePanel from "./PracticePanel";
 import type { PracticePanelMode } from "./PracticePanel";
 import { fullPracticeTime, practiceTime } from "./practice";
 import "./Practice.css";
@@ -29,19 +28,16 @@ export function Dashboard({
   completed,
   resume,
   groups: practiceGroups,
-  onSelectGroup,
-  onRefresh,
+  onManage,
 }: {
   catalog: Catalog;
   completed: number;
   resume: string | null;
   groups: PracticeGroup[];
-  onSelectGroup: (id: string, problemId?: string) => Promise<void>;
-  onRefresh: () => Promise<void>;
+  onManage: (mode: PracticePanelMode) => void;
 }) {
   const resumeProblem = catalog.problems.find((problem) => problem.id === resume);
   const [group, setGroup] = useState("全部");
-  const [panel, setPanel] = useState<PracticePanelMode | null>(null);
   const current = catalog.practiceGroup;
   const nextProblem = resumeProblem ?? catalog.problems.find(p => !catalog.progress[p.id]?.accepted) ?? catalog.problems[0];
   const learningParts = buildLearningParts(catalog);
@@ -50,7 +46,7 @@ export function Dashboard({
     <div className="page-content dashboard">
       <header className="recap-welcome">
         <div className="recap-welcome-copy"><span>每一轮，离熟练更近</span><h1>欢迎回来，继续温故知新</h1>
-          <button className="recap-current-group" onClick={() => setPanel("groups")}>{current.name}<ChevronRight size={14} /></button>
+          <button className="recap-current-group" onClick={() => onManage("groups")}>{current.name}<ChevronRight size={14} /></button>
         </div>
         <button className="recap-resume" disabled={!nextProblem} onClick={() => nextProblem && go("problem", nextProblem.id)}>
           <span>{resumeProblem ? "继续练习" : "开始本组"}<ArrowRight size={19} /></span>
@@ -66,10 +62,9 @@ export function Dashboard({
       </div>
       <div className="recap-group-bar">
         <div><span title={fullPracticeTime(current.createdAt)}>{current.legacyImported ? "导入于" : "创建于"} {practiceTime(current.createdAt)}</span><span title={current.lastPracticedAt ? fullPracticeTime(current.lastPracticedAt) : "尚未练习"}>{current.legacyImported && !current.practiceCount ? "最近记录" : "最近练习"} {practiceTime(current.lastPracticedAt)}</span></div>
-        <div><button onClick={() => setPanel("records")}><Clock3 size={13} />练习记录</button><button onClick={() => setPanel("restart")}>重新开始</button><button className="recap-new-group" onClick={() => setPanel("create")}>＋ 新练习组</button></div>
+        <div><button onClick={() => onManage("records")}><Clock3 size={13} />练习记录</button><button onClick={() => onManage("restart")}>重新开始</button><button className="recap-new-group" onClick={() => onManage("create")}>＋ 新练习组</button></div>
       </div>
       {current.copiedProgress && <p className="recap-inherited">进度复制自「{practiceGroups.find(source => source.id === current.sourceGroupId)?.name ?? "来源组"}」，本组练习次数独立记录。</p>}
-      {panel && <PracticePanel mode={panel} catalog={catalog} groups={practiceGroups} onClose={() => setPanel(null)} onSelect={onSelectGroup} onRefresh={onRefresh} />}
       <div className="dashboard-pathbar">
         <span>{learningParts.length} 大章节 · {catalog.chapters.length} 专题</span>
         <div className="filter-tabs" aria-label="筛选学习大章节">

@@ -52,6 +52,7 @@ export default function Workspace({
   chapterId,
   onRefresh,
   onReview,
+  onManageGroups,
 }: {
   id: string;
   catalog: Catalog;
@@ -59,6 +60,7 @@ export default function Workspace({
   chapterId?: string;
   onRefresh: () => Promise<void>;
   onReview: (id: string, review: boolean) => Promise<void>;
+  onManageGroups: () => void;
 }) {
   const [problem, setProblem] = useState<Problem | null>(null);
   const [error, setError] = useState("");
@@ -100,6 +102,7 @@ export default function Workspace({
       chapterId={chapterId}
       onRefresh={onRefresh}
       onReview={onReview}
+      onManageGroups={onManageGroups}
     />
   );
 }
@@ -110,6 +113,7 @@ function WorkspaceReady({
   chapterId,
   onRefresh,
   onReview,
+  onManageGroups,
 }: {
   problem: Problem;
   catalog: Catalog;
@@ -117,6 +121,7 @@ function WorkspaceReady({
   chapterId?: string;
   onRefresh: () => Promise<void>;
   onReview: (id: string, review: boolean) => Promise<void>;
+  onManageGroups: () => void;
 }) {
   const id = problem.id;
   const groupId = catalog.practiceGroup.id;
@@ -351,7 +356,7 @@ function WorkspaceReady({
           <ArrowLeft size={16} />
           <span>{chapter?.title ?? "学习路径"}</span>
         </button>
-        <span className="workspace-group-name" title={catalog.practiceGroup.name}>{catalog.practiceGroup.name}</span>
+        <button className="workspace-group-name" title="切换或管理练习组" onClick={onManageGroups}>{catalog.practiceGroup.name}</button>
         <ChevronRight size={13} className="muted" />
         <span className="workspace-current">
           {problem.number}. {problem.title}

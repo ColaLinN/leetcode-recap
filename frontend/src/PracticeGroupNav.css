@@ -1,0 +1,42 @@
+.sidebar .brand { margin-bottom: 25px; }
+.sidebar .sidebar-content { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; }
+.sidebar-content > .primary-nav { margin-bottom: 20px; }
+.sidebar-content > .chapter-nav { flex: initial; overflow: visible; }
+.practice-nav { margin-bottom: 22px; }
+.practice-nav-full > header { display: flex; align-items: center; justify-content: space-between; padding: 0 9px 7px 12px; font-size: 10px; font-weight: 600; color: #657b9d; letter-spacing: 1px; }
+.practice-nav-full > header button { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; color: #3263d3; background: #e7efff; }
+.practice-nav-list { display: flex; flex-direction: column; gap: 4px; max-height: 184px; overflow-y: auto; scrollbar-width: thin; }
+.practice-nav-list > button { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 11px; border-radius: 8px; text-align: left; color: #536c90; }
+.practice-nav-list > button > svg { flex-shrink: 0; }
+.practice-nav-list > button > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.practice-nav-list small { display: block; font-size: 9px; margin-top: 4px; color: #7a8ba4; }
+.practice-nav-list b { flex-shrink: 0; font: 10px ui-monospace, SFMono-Regular, monospace; color: #768bae; }
+.practice-nav-list > button:hover { background: #eaf0fa; }
+.practice-nav-list > button.active { background: #e2ebff; color: #2457c7; box-shadow: inset 3px 0 #3268ee; font-weight: 600; }
+.practice-nav-list > button.active b { color: #3262c2; }
+.practice-nav-actions { display: flex; align-items: center; justify-content: space-between; padding: 6px 9px 0 11px; }
+.practice-nav-actions button { display: flex; align-items: center; gap: 6px; color: #6a7e9c; font-size: 10px; min-height: 28px; }
+.practice-nav-actions button:first-child { flex: 1; }
+.practice-nav-actions b { font: 10px ui-monospace, SFMono-Regular, monospace; padding: 2px 5px; border-radius: 4px; background: #e4eaf4; }
+.practice-nav button:focus-visible { outline: 2px solid #3268ee; outline-offset: -2px; }
+.practice-nav-error { color: #b94353; font-size: 10px; line-height: 1.6; padding: 5px 10px; overflow-wrap: anywhere; }
+.practice-nav-compact { display: none; }
+.practice-dialog .practice-panel-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; padding: 0 20px; }
+.practice-dialog .practice-panel-tabs > button { padding-left: 2px; padding-right: 2px; white-space: nowrap; font-size: 11px; }
+.practice-group-row footer .practice-restore { color: #265ac9; font-weight: 650; }
+.practice-archive-note { background: #edf3ff; border: 1px solid #d7e2f5; border-radius: 9px; padding: 12px 14px; }
+button.workspace-group-name { cursor: pointer; text-align: left; }
+button.workspace-group-name:hover { background: #dfeaff; }
+@media (min-width: 801px) {
+  .workspace-mode .sidebar .brand { margin-bottom: 25px; }
+  .workspace-mode .sidebar-content { width: 100%; }
+  .workspace-mode .practice-nav { margin-bottom: 0; }
+  .workspace-mode .practice-nav-full { display: none; }
+  .workspace-mode .practice-nav-compact { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .workspace-mode .practice-nav-compact > button { display: grid; place-items: center; width: 44px; height: 42px; color: #536e96; border-radius: 9px; }
+  .workspace-mode .practice-nav-compact > button:hover { background: #e2ebff; color: #2457c7; }
+}
+@media (max-width: 800px) {
+  .practice-nav-list > button { min-height: 40px; }
+  .practice-nav-actions button { min-height: 34px; }
+}

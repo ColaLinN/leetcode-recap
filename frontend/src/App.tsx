@@ -27,6 +27,10 @@ import {
   SearchResults,
 } from "./Pages";
 import Workspace from "./Workspace";
+import PracticeGroupNav from "./PracticeGroupNav";
+import PracticePanel from "./PracticePanel";
+import type { PracticePanelMode } from "./PracticePanel";
+import "./Practice.css";
 import { activeLearningPart, buildLearningParts, expandActivePart } from "./learningPath";
 export default function App() {
   const [route, setRoute] = useState<Route>(parseRoute);
@@ -46,6 +50,7 @@ function GroupApp({ route }: { route: Route }) {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [practicePanel, setPracticePanel] = useState<PracticePanelMode | null>(null);
   const [expandedParts, setExpandedParts] = useState<Record<string, boolean>>({ 数据结构: false, 算法: false });
   const searchRef = useRef<HTMLInputElement>(null);
   const loadRevision = useRef(0);
@@ -112,6 +117,7 @@ function GroupApp({ route }: { route: Route }) {
   const refreshProgress = load;
   const selectGroup = async (id: string, problemId?: string) => {
     await api(`/api/practice-groups/${id}/activate`, { method: "POST" });
+    setMenuOpen(false);
     go(problemId ? "problem" : "home", problemId, undefined, id);
     if (id === groupId) await load();
   };
@@ -152,6 +158,7 @@ function GroupApp({ route }: { route: Route }) {
             recap<span>算法，温故而知新</span>
           </span>
         </button>
+        <div className="sidebar-content">
         <div className="sidebar-label">个人学习空间</div>
         <nav className="primary-nav">
           <button
@@ -180,6 +187,7 @@ function GroupApp({ route }: { route: Route }) {
             <span>专题笔记</span>
           </button>
         </nav>
+        <PracticeGroupNav groups={practiceGroups} currentId={groupId} onSelect={selectGroup} onManage={setPracticePanel} />
         <div className="sidebar-label chapter-label">
           学习路径 <span>{learningParts.length || "—"} 大章节 · {catalog?.chapters.length ?? "—"} 专题</span>
         </div>
@@ -238,6 +246,7 @@ function GroupApp({ route }: { route: Route }) {
             </div>
           ))}
         </nav>
+        </div>
         <div className="sidebar-bottom">
           <div className="local-badge">
             <span className="status-dot" />
@@ -340,6 +349,7 @@ function GroupApp({ route }: { route: Route }) {
             chapterId={route.chapterId}
             onRefresh={refreshProgress}
             onReview={updateReview}
+            onManageGroups={() => setPracticePanel("groups")}
           />
         ) : search.trim() ? (
           <SearchResults query={search} catalog={catalog} />
@@ -354,9 +364,11 @@ function GroupApp({ route }: { route: Route }) {
         ) : route.kind === "notes" ? (
           <NotesPage key={route.id} catalog={catalog} initial={route.id} />
         ) : (
-          <Dashboard catalog={catalog} completed={completed} resume={resume} groups={practiceGroups} onSelectGroup={selectGroup} onRefresh={load} />
+          <Dashboard catalog={catalog} completed={completed} resume={resume} groups={practiceGroups} onManage={setPracticePanel} />
         )}
       </main>
+      {catalog && practicePanel && <PracticePanel mode={practicePanel} catalog={catalog} groups={practiceGroups}
+        onClose={() => setPracticePanel(null)} onSelect={selectGroup} onRefresh={load} />}
     </div>
   );
 }

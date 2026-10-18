@@ -5,7 +5,7 @@ import { api, jsonBody } from "./api";
 import { fullPracticeTime, practiceTime } from "./practice";
 import { ErrorBox } from "./ui";
 
-export type PracticePanelMode = "groups" | "create" | "restart" | "records" | "edit";
+export type PracticePanelMode = "groups" | "create" | "restart" | "records" | "edit" | "archived";
 type GroupDetail = PracticeGroup & { problemIds: string[]; completionOverrides: Record<string, boolean>; progress: Record<string, Progress> };
 export default function PracticePanel({ mode: initialMode, catalog, groups, onClose, onSelect, onRefresh }: {
   mode: PracticePanelMode;
@@ -22,7 +22,6 @@ export default function PracticePanel({ mode: initialMode, catalog, groups, onCl
   const [chapters, setChapters] = useState<string[]>([]);
   const [copyProgress, setCopyProgress] = useState(false);
   const [copySource, setCopySource] = useState(catalog.practiceGroup.id);
-  const [showArchived, setShowArchived] = useState(false);
   const [editTarget, setEditTarget] = useState<GroupDetail | null>(null);
   const [completionUpdates, setCompletionUpdates] = useState<Record<string, boolean | null>>({});
   const [selectedProblems, setSelectedProblems] = useState<string[]>([]);
@@ -65,15 +64,17 @@ export default function PracticePanel({ mode: initialMode, catalog, groups, onCl
   const selectedCount = new Set(catalog.allChapters.filter(c => chapters.includes(c.id)).flatMap(c => c.problemIds)).size;
   const eligible = new Set(eligibleFor(all, chapters));
   const editProblems = catalog.allProblems.filter(p => eligible.has(p.id));
-  const titles = { groups: "我的练习组", create: "新建练习组", restart: "开始新一轮", records: "练习记录", edit: "编辑练习组" };
-  return <dialog className="practice-dialog" ref={dialog} onCancel={onClose} onClick={e => { if (e.target === dialog.current) onClose(); }}>
+  const archivedCount = groups.filter(group => group.archivedAt).length;
+  const listedGroups = groups.filter(group => mode === "archived" ? group.archivedAt : !group.archivedAt);
+  const titles = { groups: "我的练习组", create: "新建练习组", restart: "开始新一轮", records: "练习记录", edit: "编辑练习组", archived: "已归档练习组" };
+  return <dialog className="practice-dialog" ref={dialog} aria-label={titles[mode]} onCancel={onClose} onClick={e => { if (e.target === dialog.current) onClose(); }}>
     <div className="practice-panel">
       <header className="practice-panel-heading">
         <div><span>RECAP · 每一轮都有迹可循</span><h2>{titles[mode]}</h2></div>
         <button className="icon-button" onClick={onClose} aria-label="关闭练习管理"><X size={20} /></button>
       </header>
       <nav className="practice-panel-tabs" aria-label="练习管理">
-        {(["groups", "create", "records"] as const).map(tab => <button key={tab} className={mode === tab ? "active" : ""} onClick={() => { setMode(tab); setError(""); }}>{titles[tab]}</button>)}
+        {(["groups", "create", "archived", "records"] as const).map(tab => <button key={tab} aria-pressed={mode === tab} className={mode === tab ? "active" : ""} onClick={() => { setMode(tab); setError(""); }}>{tab === "archived" ? `已归档 (${archivedCount})` : titles[tab]}</button>)}
       </nav>
       <div className="practice-panel-content">
         {error && <ErrorBox message={error} />}
@@ -132,19 +133,22 @@ export default function PracticePanel({ mode: initialMode, catalog, groups, onCl
             <p className="practice-edit-hint">自动判断沿用原进度。手动标记用于个人复习，不生成新的判题通过记录。</p>
           </section>}
           <button className="button primary practice-create" disabled={busy || (mode === "edit" && !selectedProblems.length) || (mode === "create" && !copyProgress && !all && !selectedCount)} type="submit">{busy ? <LoaderCircle className="spin" size={16} /> : mode === "edit" ? <Pencil size={16} /> : mode === "restart" ? <RotateCcw size={16} /> : copyProgress ? <Copy size={16} /> : <Plus size={16} />}{mode === "edit" ? "保存修改" : mode === "restart" ? "新建一轮，保留旧组" : copyProgress ? "复制进度并创建" : "创建并切换"}</button>
-        </form> : mode === "groups" ? <>
-          <div className="practice-list-toolbar"><span>{groups.length} 个练习组</span><label><input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} />显示归档</label></div>
-          <div className="practice-group-list">{groups.filter(group => showArchived || !group.archivedAt).map(group => <article className={`practice-group-row ${group.id === catalog.practiceGroup.id ? "current" : ""}`} key={group.id}>
+        </form> : mode === "groups" || mode === "archived" ? <>
+          <div className="practice-list-toolbar"><span>{listedGroups.length} 个{mode === "archived" ? "已归档" : "进行中"}练习组</span></div>
+          {mode === "archived" && <p className="practice-help practice-archive-note">归档只收起练习组。题单、草稿、进度和带时间戳的历史均保留，点击“恢复”即可放回左侧列表。</p>}
+          {!listedGroups.length && <div className="practice-empty"><Archive size={26} /><strong>{mode === "archived" ? "暂无归档练习组" : "暂无进行中的练习组"}</strong><span>{mode === "archived" ? "归档后的练习组会显示在这里，可随时恢复。" : "新建一组，或从“已归档”恢复之前的练习。"}</span></div>}
+          <div className="practice-group-list">{listedGroups.map(group => <article className={`practice-group-row ${group.id === catalog.practiceGroup.id ? "current" : ""}`} key={group.id}>
             <div className="practice-group-title"><strong>{group.name}</strong>{group.id === catalog.practiceGroup.id && <span className="practice-current">当前</span>}{group.archivedAt && <small>已归档</small>}
             </div>
             <div className="practice-group-progress"><span>{group.completed}<small> / {group.total} {group.manualCount ? "已完成 · 含手动" : "已通过"}</small></span><span className="practice-mini-track"><i style={{ width: `${group.total ? group.completed / group.total * 100 : 0}%` }} /></span></div>
             <div className="practice-group-dates"><span title={fullPracticeTime(group.createdAt)}>{group.legacyImported ? "导入" : "创建"} {practiceTime(group.createdAt)}</span><span title={group.lastPracticedAt ? fullPracticeTime(group.lastPracticedAt) : "尚未练习"}>最近 {practiceTime(group.lastPracticedAt)}</span></div>
+            {group.archivedAt && <p className="practice-copy-source" title={fullPracticeTime(group.archivedAt)}>归档于 {practiceTime(group.archivedAt)}</p>}
             {group.copiedProgress && <p className="practice-copy-source">进度复制自 {groups.find(source => source.id === group.sourceGroupId)?.name ?? "来源组"}</p>}
             <footer><button disabled={busy} onClick={() => void perform(async () => {
               const detail = await api<GroupDetail>(`/api/practice-groups/${group.id}`);
               setEditTarget(detail); setName(detail.name); setAll(detail.chapterIds === null); setChapters(detail.chapterIds ?? []);
               setSelectedProblems(detail.problemIds); setCompletionUpdates({}); setProblemSearch(""); setMode("edit");
-            })}><Pencil size={12} />编辑</button><button onClick={() => { setMode("create"); setCopyProgress(true); setCopySource(group.id); setName(`${group.name} · 副本`.slice(0, 80)); }}><Copy size={12} />复制进度</button><button disabled={busy} onClick={() => void perform(async () => { await api(`/api/practice-groups/${group.id}`, { method: "PATCH", body: JSON.stringify({ archived: !group.archivedAt }) }); await onRefresh(); })}><Archive size={13} />{group.archivedAt ? "恢复" : "归档"}</button><button className="practice-continue" disabled={busy} onClick={() => void perform(async () => { await onSelect(group.id, group.lastProblemId ?? undefined); onClose(); })}>继续练习<ArrowRight size={14} /></button></footer>
+            })}><Pencil size={12} />编辑</button><button onClick={() => { setMode("create"); setCopyProgress(true); setCopySource(group.id); setName(`${group.name} · 副本`.slice(0, 80)); }}><Copy size={12} />复制进度</button><button className={group.archivedAt ? "practice-restore" : undefined} disabled={busy} onClick={() => void perform(async () => { await api(`/api/practice-groups/${group.id}`, { method: "PATCH", body: JSON.stringify({ archived: !group.archivedAt }) }); await onRefresh(); })}>{group.archivedAt ? <RotateCcw size={13} /> : <Archive size={13} />}{group.archivedAt ? "恢复" : "归档"}</button><button className="practice-continue" disabled={busy} onClick={() => void perform(async () => { await onSelect(group.id, group.lastProblemId ?? undefined); onClose(); })}>{group.archivedAt ? "查看练习" : "继续练习"}<ArrowRight size={14} /></button></footer>
           </article>)}</div>
           <p className="practice-help">归档只收起列表中的练习组，记录仍然保留，随时可恢复。</p>
         </> : <>
