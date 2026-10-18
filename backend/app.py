@@ -47,11 +47,16 @@ class GroupRequest(BaseModel):
     name: str = Field(default="", max_length=80)
     chapterIds: Optional[List[str]] = Field(default=None, max_length=100)
     restartFrom: Optional[str] = None
+    copyFrom: Optional[str] = None
 
 
 class GroupUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=80)
     archived: Optional[bool] = None
+    chapterIds: Optional[List[str]] = Field(default=None, max_length=100)
+    problemIds: Optional[List[str]] = Field(default=None, max_length=1000)
+    expectedUpdatedAt: Optional[str] = None
+    completionUpdates: Optional[dict[str, Optional[bool]]] = Field(default=None, max_length=1000)
 
 
 def safe_problem(problem):
@@ -108,6 +113,22 @@ def create_app(data_dir=None, database_path=None, judge=None, frontend_dir=None)
             raise HTTPException(404, "练习组不存在")
         return group
 
+    def selected_problem_ids(content, chapter_ids, problem_ids=None):
+        if chapter_ids is None:
+            eligible = [str(p["id"]) for p in content["problems"]]
+        else:
+            chapters = {c["id"]: c for c in content["chapters"]}
+            if not chapter_ids or any(c not in chapters for c in chapter_ids):
+                raise HTTPException(422, "请选择有效章节")
+            eligible = list(dict.fromkeys(p for c in chapter_ids for p in chapters[c]["problemIds"]))
+        if problem_ids is not None:
+            if not problem_ids or any(p not in eligible for p in problem_ids):
+                raise HTTPException(422, "请选择所选章节内的有效题目")
+            return list(dict.fromkeys(problem_ids))
+        if not eligible:
+            raise HTTPException(422, "练习组至少需要一道题")
+        return eligible
+
     def scoped_problem(problem_id, group_id):
         practice_group(group_id)
         problem = problem_by_id(problem_id)
@@ -126,9 +147,14 @@ def create_app(data_dir=None, database_path=None, judge=None, frontend_dir=None)
     @app.post("/api/practice-groups")
     def create_group(body: GroupRequest):
         content = catalog()
-        if body.restartFrom:
-            source = practice_group(body.restartFrom)
-            ids = store.problem_ids(body.restartFrom)
+        if body.restartFrom and body.copyFrom:
+            raise HTTPException(422, "请选择空白重练或复制进度")
+        source_id = body.copyFrom or body.restartFrom
+        if source_id:
+            if body.chapterIds is not None:
+                raise HTTPException(422, "复制或重练时沿用来源组题单")
+            source = practice_group(source_id)
+            ids = store.problem_ids(source_id)
             chapter_ids = source["chapterIds"]
         elif body.chapterIds is None:
             ids = [str(p["id"]) for p in content["problems"]]
@@ -141,15 +167,27 @@ def create_app(data_dir=None, database_path=None, judge=None, frontend_dir=None)
             chapter_ids = list(dict.fromkeys(body.chapterIds))
         if not ids:
             raise HTTPException(422, "练习组至少需要一道题")
-        name = body.name.strip() or f"第 {len(store.groups()) + 1} 轮复习"
-        return store.create_group(name, ids, body.restartFrom, chapter_ids)
+        name = body.name.strip() or (f"{source['name']} · 副本"[:80] if body.copyFrom else f"第 {len(store.groups()) + 1} 轮复习")
+        return store.create_group(name, ids, source_id, chapter_ids, copy_progress=bool(body.copyFrom))
+
+    @app.get("/api/practice-groups/{group_id}")
+    def group_detail(group_id: str):
+        return dict(practice_group(group_id), problemIds=store.problem_ids(group_id),
+                    completionOverrides=store.completion_states(group_id), progress=store.progress(group_id))
 
     @app.patch("/api/practice-groups/{group_id}")
     def update_group(group_id: str, body: GroupUpdate):
-        practice_group(group_id)
+        group = practice_group(group_id)
         if body.name is not None and not body.name.strip():
             raise HTTPException(422, "练习组名称不能为空")
-        return store.update_group(group_id, body.name.strip() if body.name else None, body.archived)
+        edit_scope = bool({"chapterIds", "problemIds"} & body.model_fields_set)
+        chapter_ids = body.chapterIds if "chapterIds" in body.model_fields_set else group["chapterIds"]
+        ids = selected_problem_ids(catalog(), chapter_ids, body.problemIds) if edit_scope else None
+        valid_ids = set(ids if ids is not None else store.problem_ids(group_id))
+        if body.completionUpdates and any(p not in valid_ids for p in body.completionUpdates):
+            raise HTTPException(422, "只能调整当前题单内的完成状态")
+        return store.update_group(group_id, body.name.strip() if body.name else None, body.archived,
+                                  ids, chapter_ids, body.expectedUpdatedAt, body.completionUpdates)
 
     @app.post("/api/practice-groups/{group_id}/activate")
     def activate_group(group_id: str):
@@ -184,6 +222,7 @@ def create_app(data_dir=None, database_path=None, judge=None, frontend_dir=None)
         chapters = [dict(c, problemIds=[p for p in c["problemIds"] if p in ids]) for c in content["chapters"]
                     if group["chapterIds"] is None or c["id"] in group["chapterIds"]]
         return dict(content, chapters=[c for c in chapters if c["problemIds"]], allChapters=content["chapters"],
+                    allProblems=[{key: p[key] for key in ("id", "number", "title", "difficulty") if key in p} for p in content["problems"]],
                     problems=[safe_problem(p) for p in content["problems"] if str(p["id"]) in ids],
                     progress={p: v for p, v in store.progress(group_id).items() if p in ids}, practiceGroup=group)
 

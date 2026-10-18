@@ -59,7 +59,7 @@ export function Dashboard({
         </button>
       </header>
       <div className="recap-stats" aria-label="当前练习组统计">
-        <div><strong>{completed}<small> / {catalog.problems.length}</small></strong><span>本组已通过</span></div>
+        <div><strong>{completed}<small> / {catalog.problems.length}</small></strong><span>{current.manualCount ? "本组已完成 · 含手动" : "本组已通过"}</span></div>
         <div><strong>{current.practiceCount}<small> 次</small></strong><span>本组练习{current.legacyImported ? " · 新版起" : ""}</span></div>
         <div><strong>{current.streak}<small> 天</small></strong><span>连续练习 · 本组</span></div>
         <div><strong>{current.weeklyCount}<small> 次</small></strong><span>近 7 天 · 本组</span></div>
@@ -68,6 +68,7 @@ export function Dashboard({
         <div><span title={fullPracticeTime(current.createdAt)}>{current.legacyImported ? "导入于" : "创建于"} {practiceTime(current.createdAt)}</span><span title={current.lastPracticedAt ? fullPracticeTime(current.lastPracticedAt) : "尚未练习"}>{current.legacyImported && !current.practiceCount ? "最近记录" : "最近练习"} {practiceTime(current.lastPracticedAt)}</span></div>
         <div><button onClick={() => setPanel("records")}><Clock3 size={13} />练习记录</button><button onClick={() => setPanel("restart")}>重新开始</button><button className="recap-new-group" onClick={() => setPanel("create")}>＋ 新练习组</button></div>
       </div>
+      {current.copiedProgress && <p className="recap-inherited">进度复制自「{practiceGroups.find(source => source.id === current.sourceGroupId)?.name ?? "来源组"}」，本组练习次数独立记录。</p>}
       {panel && <PracticePanel mode={panel} catalog={catalog} groups={practiceGroups} onClose={() => setPanel(null)} onSelect={onSelectGroup} onRefresh={onRefresh} />}
       <div className="dashboard-pathbar">
         <span>{learningParts.length} 大章节 · {catalog.chapters.length} 专题</span>
@@ -374,7 +375,7 @@ export function ChapterPage({
             size={56}
           />
           <span>
-            {done} / {problems.length} 已通过
+            {done} / {problems.length} {catalog.practiceGroup.manualCount ? "已完成" : "已通过"}
           </span>
         </div>
       </section>

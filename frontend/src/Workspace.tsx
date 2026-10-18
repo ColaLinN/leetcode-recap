@@ -428,7 +428,7 @@ function WorkspaceReady({
                     {accepted && (
                       <span className="accepted-label">
                         <CheckCircle2 size={14} />
-                        已通过
+                        {catalog.practiceGroup.manualCount ? "已完成" : "已通过"}
                       </span>
                     )}
                     {problem.tags.map((tag) => (

@@ -204,3 +204,112 @@ def test_in_flight_submission_remains_in_original_group_after_switch(fixture):
     second = client.get(f'/api/problems/sum?group_id={other}').json()
     assert second['draft'] == 'B draft' and second['accepted'] is False
     assert client.get(f'/api/problems/sum/submissions?group_id={other}').json()['submissions'] == []
+
+
+def test_copy_carries_progress_draft_review_and_resume_without_fabricating_history(fixture):
+    client, _, _ = fixture
+    client.post('/api/problems/sum/visit', json={'sessionId': 'source-visit'})
+    client.put('/api/problems/sum/draft', json={'code': 'source draft', 'sessionId': 'source-visit'})
+    client.put('/api/problems/sum/review', json={'review': True})
+    original = client.post('/api/problems/sum/submit', json={'code': 'source submitted', 'sessionId': 'source-visit'}).json()
+    copied = new_group(client, copyFrom='original')
+    group = copied['id']
+    assert copied['copiedProgress'] is True and copied['sourceGroupId'] == 'original'
+    assert copied['completed'] == 1 and copied['practiceCount'] == 0 and copied['weeklyCount'] == 0
+    state = client.get(f'/api/problems/sum?group_id={group}').json()
+    assert state['draft'] == 'source draft' and state['review'] is True and state['accepted'] is True
+    assert client.get(f'/api/resume?group_id={group}').json()['problemId'] == 'sum'
+    assert client.get(f'/api/practice-groups/{group}/sessions').json()['total'] == 0
+    assert client.get(f'/api/problems/sum/submissions?group_id={group}').json()['submissions'] == []
+    client.put(f'/api/problems/sum/draft?group_id={group}', json={'code': 'copy draft', 'sessionId': 'copy-visit'})
+    client.put(f'/api/problems/sum/review?group_id={group}', json={'review': False})
+    assert client.get('/api/problems/sum').json()['draft'] == 'source draft'
+    assert client.get('/api/problems/sum').json()['review'] is True
+    assert client.get('/api/problems/sum/submissions').json()['submissions'][0]['id'] == original['submissionId']
+    restarted = new_group(client, restartFrom=group)
+    assert restarted['copiedProgress'] is False and restarted['completed'] == 0
+    assert client.get(f'/api/problems/sum?group_id={restarted["id"]}').json()['draft'] is None
+
+
+def test_copy_rejects_ambiguous_or_unknown_source(fixture):
+    client, _, _ = fixture
+    assert client.post('/api/practice-groups', json={'copyFrom': 'missing'}).status_code == 404
+    assert client.post('/api/practice-groups', json={'copyFrom': 'original', 'restartFrom': 'original'}).status_code == 422
+    assert client.post('/api/practice-groups', json={'copyFrom': 'original', 'chapterIds': []}).status_code == 422
+
+
+def expand_catalog(options):
+    path = Path(options['data_dir']) / 'catalog.json'
+    content = json.loads(path.read_text())
+    content['problems'].append(dict(content['problems'][0], id='other', title='第二题'))
+    content['chapters'] = [dict(id='arrays', title='数组', problemIds=['sum'], group='数据结构'),
+                           dict(id='dp', title='动态规划', problemIds=['other'], group='算法')]
+    path.write_text(json.dumps(content))
+
+
+def test_edit_scope_in_place_preserves_removed_code_history_and_completion(fixture):
+    client, _, options = fixture
+    expand_catalog(options)
+    group = new_group(client, name='可编辑')
+    gid = group['id']
+    client.put(f'/api/problems/sum/draft?group_id={gid}', json={'code': 'preserve me', 'sessionId': 'scope-visit'})
+    client.put(f'/api/problems/sum/review?group_id={gid}', json={'review': True})
+    submitted = client.post(f'/api/problems/sum/submit?group_id={gid}', json={'code': 'submitted', 'sessionId': 'scope-visit'}).json()
+    client.post(f'/api/problems/sum/visit?group_id={gid}', json={'sessionId': 'scope-visit'})
+    edited = client.patch(f'/api/practice-groups/{gid}', json={'name': '原地修改', 'chapterIds': ['dp'], 'problemIds': ['other'], 'expectedUpdatedAt': group['updatedAt']}).json()
+    assert edited['id'] == gid and edited['createdAt'] == group['createdAt']
+    assert edited['name'] == '原地修改' and edited['total'] == 1 and edited['completed'] == 0
+    assert client.get(f'/api/resume?group_id={gid}').json()['problemId'] is None
+    assert client.get(f'/api/problems/sum?group_id={gid}').status_code == 404
+    copied_without_hidden = new_group(client, copyFrom=gid)
+    assert copied_without_hidden['total'] == 1 and copied_without_hidden['completed'] == 0
+    restored = client.patch(f'/api/practice-groups/{gid}', json={'chapterIds': None, 'problemIds': ['sum', 'other'], 'expectedUpdatedAt': edited['updatedAt']}).json()
+    assert restored['id'] == gid and restored['completed'] == 1 and restored['total'] == 2
+    state = client.get(f'/api/problems/sum?group_id={gid}').json()
+    assert (state['draft'], state['review'], state['accepted']) == ('preserve me', True, True)
+    records = client.get(f'/api/problems/sum/submissions?group_id={gid}').json()['submissions']
+    assert records[0]['id'] == submitted['submissionId'] and records[0]['createdAt'] == submitted['createdAt']
+    assert client.get(f'/api/practice-groups/{gid}/sessions').json()['total'] == 1
+
+
+def test_scope_validation_and_stale_edit_do_not_partially_mutate_group(fixture):
+    client, _, options = fixture
+    expand_catalog(options)
+    group = new_group(client, name='unchanged')
+    gid = group['id']
+    for body in ({'chapterIds': []}, {'problemIds': []}, {'problemIds': ['missing']},
+                 {'chapterIds': ['arrays'], 'problemIds': ['other']}, {'completionUpdates': {'missing': True}}):
+        assert client.patch(f'/api/practice-groups/{gid}', json=dict(body, name='must not stick')).status_code == 422
+        assert client.get(f'/api/practice-groups/{gid}').json()['name'] == 'unchanged'
+    first = client.patch(f'/api/practice-groups/{gid}', json={'name': 'new name', 'expectedUpdatedAt': group['updatedAt']}).json()
+    assert first['name'] == 'new name'
+    assert client.patch(f'/api/practice-groups/{gid}', json={'problemIds': ['sum'], 'expectedUpdatedAt': group['updatedAt']}).status_code == 409
+    detail = client.get(f'/api/practice-groups/{gid}').json()
+    assert detail['problemIds'] == ['sum', 'other'] and detail['name'] == 'new name'
+
+
+def test_manual_completion_is_reversible_without_faking_judge_history(fixture):
+    client, judge, _ = fixture
+    group = new_group(client)
+    gid = group['id']
+    marked = client.patch(f'/api/practice-groups/{gid}', json={'completionUpdates': {'sum': True}}).json()
+    assert marked['completed'] == 1 and marked['manualCount'] == 1 and marked['practiceCount'] == 0
+    assert client.get(f'/api/problems/sum?group_id={gid}').json()['accepted'] is True
+    assert client.get(f'/api/problems/sum/submissions?group_id={gid}').json()['submissions'] == []
+    client.patch(f'/api/practice-groups/{gid}', json={'completionUpdates': {'sum': None}})
+    assert client.get(f'/api/problems/sum?group_id={gid}').json()['accepted'] is False
+    passed = client.post(f'/api/problems/sum/submit?group_id={gid}', json={'code': 'accepted'}).json()
+    reset = client.patch(f'/api/practice-groups/{gid}', json={'completionUpdates': {'sum': False}}).json()
+    assert reset['completed'] == 0 and reset['manualCount'] == 1
+    assert client.get(f'/api/problems/sum/submissions?group_id={gid}').json()['submissions'][0]['id'] == passed['submissionId']
+    copy = new_group(client, copyFrom=gid)
+    assert copy['completed'] == 0 and copy['manualCount'] == 1
+    judge.status = 'Wrong Answer'
+    client.post(f'/api/problems/sum/submit?group_id={gid}', json={'code': 'wrong'})
+    assert client.get(f'/api/problems/sum?group_id={gid}').json()['accepted'] is False
+    judge.status = 'Accepted'
+    client.post(f'/api/problems/sum/submit?group_id={gid}', json={'code': 'accepted again'})
+    final = client.get(f'/api/practice-groups/{gid}').json()
+    assert final['completed'] == 1 and final['manualCount'] == 0
+    # The copied group keeps its independent manual reset.
+    assert client.get(f'/api/problems/sum?group_id={copy["id"]}').json()['accepted'] is False

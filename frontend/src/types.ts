@@ -53,15 +53,19 @@ export interface Catalog {
   progress: Record<string, Progress>;
   practiceGroup: PracticeGroup;
   allChapters: Chapter[];
+  allProblems: Pick<Problem, "id" | "number" | "title" | "difficulty">[];
 }
 export interface PracticeGroup {
   id: string;
   name: string;
   createdAt: string;
+  updatedAt: string;
   lastPracticedAt: string | null;
   lastProblemId: string | null;
   archivedAt: string | null;
   sourceGroupId: string | null;
+  copiedProgress: boolean;
+  manualCount: number;
   chapterIds: string[] | null;
   legacyImported: boolean;
   total: number;
