@@ -38,6 +38,8 @@ RECAP_PORT=8766 ./scripts/start.sh # 自定义端口（先停止旧服务）
 - 查看提交历史并恢复代码、标记待复习、继续上次练习。
 - 支持数组、链表、二叉树，以及 LRU、Trie 等设计类题目。
 
+![分屏做题与真实判题](docs/screenshots/workspace.jpg)
+
 ## 做题与输入
 
 只需实现编辑器中的方法，不必解析标准输入或打印最终答案。常用 `typing` 类型、`ListNode` 和 `TreeNode` 由运行环境提供。具体方法与参数顺序以每题模板为准。
@@ -67,9 +69,12 @@ runtime/               本机草稿、进度、提交记录与日志（Git 忽�
 
 ## 开发与验证
 
+`make test` 可一并运行内容检查、导入回归、前后端测试与构建。
+
 ```sh
 ./scripts/dev.sh                       # API + 前端开发服务
 .venv/bin/python scripts/check_content.py
+.venv/bin/python scripts/test_import_notes.py
 .venv/bin/python -m pytest backend/tests -q
 npm --prefix frontend test
 npm --prefix frontend run build

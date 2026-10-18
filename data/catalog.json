@@ -265634,7 +265634,7 @@
       "sourcePath": "/Users/fenglyulin/guzheng/github/blog/fenglyu-doc-site-v1/docs/leetcode/topics/240229-binary-search.md",
       "problemLinks": [
         {
-          "title": "i, j)` | 尚未判断 | 已确定为蓝色，或虚拟边界 `n` |\n| `(i, j)` | 已确定为红色，或虚拟边界 `-1` | 已确定为蓝色，或虚拟边界 `n` |\n\n表中的“尚未判断”适用于区间非空时；结束时区间已空。开闭只说明边界是否属于待判断区间，边界的颜色则由这三段代码的更新规则保证。\n\n## [162. Find Peak Element",
+          "title": "162. Find Peak Element",
           "url": "https://leetcode.cn/problems/find-peak-element/"
         },
         {
@@ -266014,10 +266014,6 @@
       "path": "content/roadmap.md",
       "sourcePath": "/Users/fenglyulin/guzheng/github/blog/fenglyu-doc-site-v1/docs/leetcode/topics/roadmap.md",
       "problemLinks": [
-        {
-          "title": "灵茶山艾府",
-          "url": "https://github.com/EndlessCheng/codeforces-go/blob/master/leetcode/README.md"
-        },
         {
           "title": "167. 两数之和 II - 输入有序数组",
           "url": "https://leetcode.cn/problems/two-sum-ii-input-array-is-sorted/"

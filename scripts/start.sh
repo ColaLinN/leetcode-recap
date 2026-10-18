@@ -21,6 +21,7 @@ fi
 .venv/bin/python - "$port" <<'CHECK_PORT'
 import socket, sys
 with socket.socket() as sock:
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
         sock.bind(('127.0.0.1', int(sys.argv[1])))
     except OSError:

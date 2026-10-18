@@ -16,6 +16,33 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE = Path.home() / 'guzheng/github/blog/fenglyu-doc-site-v1/docs/leetcode/topics'
 
 
+def extract_problem_links(markdown: str) -> list[dict]:
+    """Index real single-line links, without consuming math or fenced examples."""
+    prose = []
+    fence_char, fence_size = None, 0
+    for line in markdown.splitlines():
+        fence = re.match(r'^\s*(`{3,}|~{3,})(.*)$', line)
+        if fence:
+            marker, trailing = fence.groups()
+            if fence_char is None:
+                fence_char, fence_size = marker[0], len(marker)
+            elif marker[0] == fence_char and len(marker) >= fence_size and not trailing.strip():
+                fence_char, fence_size = None, 0
+            continue
+        if fence_char is None:
+            prose.append(line)
+    links, seen = [], set()
+    # In particular, an unmatched interval such as [i,j) must never consume
+    # subsequent prose or the opening bracket of a genuine link.
+    for match in re.finditer(r'(?<!!)\[([^\[\]\r\n]*)\]\((https?://[^)\s]+)\)', '\n'.join(prose)):
+        label, url = match.groups()
+        hostname = (urlparse(url).hostname or '').lower()
+        if hostname in {'leetcode.com', 'leetcode.cn', 'leetcode-cn.com'} and url not in seen:
+            links.append({'title': label.strip() or url, 'url': url})
+            seen.add(url)
+    return links
+
+
 def import_notes(source: Path, data_dir: Path = ROOT / 'data') -> list[dict]:
     source = source.expanduser().resolve()
     if not source.is_dir():
@@ -53,15 +80,8 @@ def import_notes(source: Path, data_dir: Path = ROOT / 'data') -> list[dict]:
         body = re.sub(r'''(\bsrc=["'])([^"']+)(["'])''', rewrite, body)
         out = content / path.name
         out.write_text(body, encoding='utf-8')
-        problem_links = []
-        seen = set()
-        for match in re.finditer(r'\[([^\]]*)\]\((https?://[^)\s]+)\)', original):
-            label, url = match.groups()
-            if 'leetcode' in url and url not in seen:
-                problem_links.append({'title': label or url, 'url': url})
-                seen.add(url)
         notes.append({'id': path.stem, 'title': title, 'path': 'content/' + path.name,
-                      'sourcePath': str(path), 'problemLinks': problem_links})
+                      'sourcePath': str(path), 'problemLinks': extract_problem_links(original)})
     return notes
 
 
