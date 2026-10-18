@@ -10,7 +10,7 @@ if ! docker info >/dev/null 2>&1; then
 fi
 python3 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -r backend/requirements.txt
+.venv/bin/python -m pip install -r backend/requirements.lock
 npm --prefix frontend ci
 npm --prefix frontend run build
 docker build -t recap-python:local backend/judge

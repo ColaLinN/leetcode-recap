@@ -65,11 +65,12 @@ runtime/               本机草稿、进度、提交记录与日志（Git 忽�
 ./scripts/dev.sh                       # API + 前端开发服务
 .venv/bin/python -m pytest backend/tests -q
 npm --prefix frontend run build
+.venv/bin/python -m backend.validate_catalog --workers 2 # 全题库真实 Docker 回归
 ```
 
 生产预览由 FastAPI 直接提供构建后的前端；开发环境由 Vite 转发 `/api` 和 `/content` 到本机后端。开发服务与生产服务使用同一默认后端端口，切换前先停止现有服务。
 
-完整测试范围与验证结果见 [验证记录](docs/VERIFICATION.md)。接口可在本地 [API 文档](http://127.0.0.1:8765/docs) 查看。
+完整测试范围与验证结果见 [验证记录](docs/VERIFICATION.md)。接口可在本地 [API 文档](http://127.0.0.1:8765/api/docs) 查看。
 
 ## 更新笔记与扩充题库
 

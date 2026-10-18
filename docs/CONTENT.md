@@ -8,6 +8,15 @@
 .venv/bin/python scripts/import_notes.py
 ```
 
+若需要根据项目中维护的题目定义重新生成完整题库：
+
+```sh
+.venv/bin/python scripts/build_catalog.py
+.venv/bin/python -m backend.validate_catalog --workers 2
+```
+
+生成器仅执行项目内维护的可信参考解，用独立模型生成并校验测试预期；不接收用户提交代码。常规练习的提交代码始终在 Docker 中运行。
+
 导入后重启服务。已有题目通过 `sourceNoteIds` 关联笔记；新增笔记可能需要在章节的 `noteIds` 中手动关联。不要把草稿与提交历史写入题库文件。
 
 ## 题目模型

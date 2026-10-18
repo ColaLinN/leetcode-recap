@@ -15,6 +15,7 @@ Personal local Chinese algorithm learning app. iOS-inspired pale surfaces, tacti
 - POST `/api/problems/{id}/run` body `{code,customArgs?:[...]} `; optional custom input expected is computed via reference solution. For design same args shape.
 - POST `/api/problems/{id}/submit` body `{code}`
 - GET `/api/problems/{id}/submissions`: `{submissions:[{id,status,passed,total,elapsedMs,createdAt,code,results:[...]}]}`
+- POST `/api/problems/{id}/visit`: explicitly records last opened problem; late autosaves or submissions must not change it.
 - GET `/api/resume`: `{problemId:string|null}`
 - execution result `{status:'Accepted'|'Wrong Answer'|'Runtime Error'|'Time Limit Exceeded'|'Output Limit Exceeded'|'Judge Unavailable',passed,total,elapsedMs,results:[{index,status,input,expected,actual,stdout,error,elapsedMs}],submissionId?}`
 - Serve `/content` from `data/content`; serve frontend build at root. API bound loopback in scripts. Vite dev proxy `/api` & `/content`.
