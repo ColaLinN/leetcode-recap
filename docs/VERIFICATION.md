@@ -181,4 +181,13 @@ npm --prefix frontend audit --omit=dev
 - 前端 68 项测试、TypeScript 检查与生产构建通过，新增路由回归覆盖分类链接、组上下文和无效分类参数。此次未改动个人记录或后端存储。
 
 预览：[宽屏顶部](screenshots/header-wide.jpg)、[手机顶部](screenshots/header-mobile.jpg)。
+
+## 运行结果区上下拖动（2026-10-19）
+
+- 编辑器和运行结果之间新增横向拖动手柄，向下增加代码空间，向上增加结果空间；鼠标与触控使用 Pointer Capture，拖动结束、取消、失焦和卸载均清理拖动状态。底部运行/提交工具栏单独保留，不随两区比例移动。
+- 支持上下方向键调整、Home/End 到边界、双击或 Enter 恢复默认比例。两侧保留最小可用空间，展开编辑器及手机布局也可调整。偏好仅保存在浏览器 `localStorage` 的 `recap:layout:editor-share`，不改动练习组、草稿或提交数据。
+- 隔离测试库浏览器实际执行接雨水样例 2/2，再向下拖动约 130px：编辑器由 324px 增至约 453px，运行结果约 111px，底部工具栏 Y=661 保持不变，2/2 结果保留。拖到边界时编辑器至少约 201px、结果至少约 97px；双击回到默认约 58%。
+- 键盘向上/向下调整、刷新恢复比例、展开与收起编辑器、390×844 窄屏均验证通过；拖动结束光标状态正常，页面无横向溢出，控制台无错误或警告。保存的草稿与调整前逐字一致。前端 68 项测试及 TypeScript/生产构建通过；所有运行与浏览器练习测试均使用独立 `8766` 数据库。
+
+预览：[向下拖动运行结果区](screenshots/result-panel-resize.jpg)。
 - 正式操作入口截图：`docs/screenshots/practice-copy-controls.png`；隔离手机编辑预览：`docs/screenshots/practice-edit-mobile.png`。

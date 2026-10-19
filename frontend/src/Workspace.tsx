@@ -40,6 +40,7 @@ import { Difficulty, Empty, ErrorBox, formatValue, statusLabel } from "./ui";
 import Markdown from "./Markdown";
 import { NoteReader } from "./Pages";
 import ResultView from "./ResultView";
+import EditorResultSplit from "./EditorResultSplit";
 import type { ErrorDiagnostic, ErrorNavigation, ExecutionSnapshot } from "./errorDiagnostics";
 import { createLeetCodeBridge, emptyLeetCodeBridgeState, isLeetCodePending, leetCodeSlug, submitWithSnapshot } from "./leetcodeBridge";
 import type { LeetCodeBridgeState } from "./leetcodeBridge";
@@ -566,6 +567,7 @@ function WorkspaceReady({
           <i />
         </div>
         <section className="editor-column">
+          <EditorResultSplit>
           <div className="editor-panel workspace-panel">
             <div className="editor-toolbar">
               <span className="editor-filename">
@@ -732,6 +734,7 @@ function WorkspaceReady({
               )}
             </div>
           </section>
+          </EditorResultSplit>
           <footer className="run-bar leetcode-run-bar">
             <span className="local-test-label">
               <span
